@@ -88,7 +88,7 @@ This is a learning and portfolio system, not production ticketing software. Paym
 16. [Observability](#observability)
 17. [Security](#security)
 18. [Cost](#cost)
-19. [Roadmap](#roadmap)
+19. [Roadmap](#roadmap) ([detailed plan](docs/development-plan.md))
 20. [What I Learned](#what-i-learned)
 21. [Limitations](#limitations)
 22. [License](#license)
@@ -564,6 +564,7 @@ seatlock/
 │   ├── lib/                  # Stacks and constructs
 │   └── bin/
 ├── services/                 # Core services (TypeScript)
+│   ├── health/               # Phase 0 smoke / DynamoDB read check
 │   ├── hold-seat/            # single and group holds
 │   ├── create-order/
 │   ├── saga-steps/           # verify, lock, authorize, confirm, capture, issue
@@ -571,6 +572,7 @@ seatlock/
 │   ├── refund-orchestrator/
 │   ├── refund-worker/
 │   └── shared/               # DynamoDB helpers, idempotency, types
+├── scripts/                  # seed + host-side smoke helpers
 ├── go/                       # Go components
 │   ├── mock-payment/         # configurable provider (latency, errors, duplicates, rate limit)
 │   ├── hold-sweeper/
@@ -583,6 +585,7 @@ seatlock/
 │   └── failure/              # failure-injection scenarios
 ├── docs/
 │   ├── adr/                  # architecture decision records
+│   ├── development-plan.md   # learn-while-building implementation order
 │   ├── runbook.md
 │   └── contracts.md          # seat states, conditions, event shapes
 └── README.md
@@ -602,24 +605,23 @@ seatlock/
 
 ### Run locally with MiniStack
 
-[MiniStack](https://github.com/ministackorg/ministack) is an open-source local AWS emulator for development and failure tests.
+[MiniStack](https://github.com/ministackorg/ministack) is an open-source local AWS emulator for development and failure tests. Step-by-step ops live in [`docs/runbook.md`](docs/runbook.md).
 
 ```bash
-# Start the emulator
-docker run -p 4566:4566 ministackorg/ministack
-
-# Point the SDKs at it
-export AWS_ENDPOINT_URL=http://localhost:4566
-export AWS_ACCESS_KEY_ID=test
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=us-east-1
-
-# Install and deploy
 npm install
-cd infra && npx cdk deploy --all
+cp .env.example .env   # optional; or: set -a && source .env.example && set +a
+
+npm run ministack:up
+npm run deploy:local   # cdklocal bootstrap + deploy
+npm run seed
+npm run get-seat
+
+# Health API (use ApiUrl from stack outputs / .cdk-outputs.json)
+curl "$API_URL/health"
+curl "$API_URL/health?eventId=evt_001&seatId=A-12-01"
 ```
 
-See MiniStack docs for CDK bootstrapping in your setup. Reset emulator state between runs with `POST http://localhost:4566/_ministack/reset`.
+Reset emulator state between runs with `npm run ministack:reset`, then redeploy and reseed.
 
 ### Deploy to AWS
 
@@ -785,18 +787,25 @@ Measured cost per 1,000 purchases is reported in [Results](#results).
 
 ## Roadmap
 
-- [ ] Stage 1: CDK foundation, single-seat `POST /holds`, seats table, Cognito auth
-- [ ] Stage 2: Concurrency control, expiry logic, contention test
-- [ ] Stage 3: Group holds with transactions, block search, overlap tests
-- [ ] Stage 4: Orders, idempotency, SQS buffering
-- [ ] Stage 5: Step Functions saga with compensation (group-aware), mock payment provider
-- [ ] Stage 6: Streams relay, EventBridge, notifications
-- [ ] Stage 7: Signed tickets, KMS, secrets, least-privilege IAM
-- [ ] Stage 8: DLQ replay, hold sweeper, reconciler
-- [ ] Stage 9: Event cancellation, refund orchestrator, rate-limited workers, batch tracking
-- [ ] Stage 10: Dashboards, alarms, tracing
-- [ ] Stage 11: Go auditor, load and failure tests, results table, cost report
-- [ ] Stage 12: CI/CD, dev and prod environments, canary deploys
+Implementation order for learning while building lives in [`docs/development-plan.md`](docs/development-plan.md). Follow that document phase by phase so dependencies (holds → orders → payment mock → saga → refunds) stay correct.
+
+Summary (details, “done when”, and what not to skip are in the plan):
+
+- [x] Phase 0: Local MiniStack loop, shared types, seed event/seats
+- [ ] Phase 1: Single-seat hold (conditional write)
+- [ ] Phase 2: Hold expiry checks + sweeper
+- [ ] Phase 3: Group holds (`TransactWriteItems`, block search)
+- [ ] Phase 4: Orders, idempotency, SQS (+ DLQ)
+- [ ] Phase 5: Mock payment provider (Go)
+- [ ] Phase 6: Step Functions saga, ledger, `PAYING` / compensation
+- [ ] Phase 7: Streams relay, EventBridge, notifications
+- [ ] Phase 8: Cognito, least-privilege IAM, secrets
+- [ ] Phase 9: Signed tickets (KMS + S3)
+- [ ] Phase 10: Event cancellation, refund orchestrator/workers, batch tracking
+- [ ] Phase 11: Reconciler + independent auditor
+- [ ] Phase 12: Dashboards, alarms, tracing
+- [ ] Phase 13: Failure suite, load test, results table, cost report
+- [ ] Phase 14: CI/CD, dev/prod stages (optional)
 
 Possible extensions:
 
@@ -811,8 +820,9 @@ Possible extensions:
 
 ## What I Learned
 
-_Filled in as the project is built. Placeholder topics:_
+_Filled in as the project is built._
 
+- Phase 0: Lambdas inside MiniStack Docker cannot use `localhost` for DynamoDB — the endpoint must be `host.docker.internal`. `aws-cdk-local` v3 also needs both `AWS_ENDPOINT_URL` and `AWS_ENDPOINT_URL_S3`.
 - DynamoDB conditional writes and `TransactWriteItems` under contention
 - Hold expiry vs payment in flight (`PAYING` / `payUntil`)
 - Idempotency for orders, payments, and refunds

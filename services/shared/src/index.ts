@@ -1,15 +1,20 @@
-/**
- * Shared types and helpers for TypeScript services.
- * TODO: DynamoDB helpers, idempotency, seat/order/ledger types.
- */
+export type {
+  SeatStatus,
+  OrderStatus,
+  EventStatus,
+  EventItem,
+  SeatItem,
+} from "./types";
 
-export type SeatStatus = "AVAILABLE" | "HELD" | "PAYING" | "SOLD";
-export type OrderStatus =
-  | "PENDING"
-  | "CONFIRMED"
-  | "FAILED"
-  | "REFUND_PENDING"
-  | "REFUNDED";
-export type EventStatus = "ON_SALE" | "CANCELLING" | "CANCELLED";
+export { requireEnv, optionalEnv } from "./env";
+export { createDynamoDBClient, getDocClient } from "./dynamodb";
 
-export const PLACEHOLDER = true;
+/** Zero-pad a seat number so row range queries sort correctly (e.g. 7 → "07"). */
+export function formatSeatId(
+  section: string,
+  row: string | number,
+  seatNum: number,
+  width = 2,
+): string {
+  return `${section}-${row}-${String(seatNum).padStart(width, "0")}`;
+}

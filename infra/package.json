@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "echo \"TODO: compile CDK\"",
-    "cdk": "cdk"
+    "build": "tsc -p ../tsconfig.json --noEmit",
+    "cdk": "cdk",
+    "cdklocal": "cdklocal"
   }
 }

@@ -10,8 +10,9 @@
     "resolveJsonModule": true,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "moduleResolution": "node"
   },
-  "include": ["services/**/*", "infra/**/*"],
+  "include": ["services/**/*", "infra/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "cdk.out", "dist"]
 }

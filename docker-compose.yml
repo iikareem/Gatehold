@@ -4,6 +4,7 @@
 # Start:  docker compose up -d
 # Health: curl http://localhost:4566/_ministack/health
 # Reset:  curl -X POST http://localhost:4566/_ministack/reset
+# UI:     http://localhost:8080  (StackPort — DynamoDB browser, not a second DB)
 
 services:
   ministack:
@@ -31,3 +32,29 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # DynamoDB UI (and other AWS service browsers) — StackPort
+  # https://stackport.cloud/docs/guides/ministack/
+  #
+  # This is NOT a second DynamoDB. MiniStack already provides DynamoDB on :4566.
+  # StackPort is only a web console that reads/writes that same emulator.
+  # Open: http://localhost:8080 → DynamoDB → seatlock-dev-seats / seatlock-dev-events
+  # ---------------------------------------------------------------------------
+  stackport:
+    image: davireis/stackport:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # Point at the MiniStack service on the compose network (same DynamoDB)
+      - AWS_ENDPOINT_URL=http://ministack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      # Faster startup: only probe services we use locally
+      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,apigateway,iam
+    depends_on:
+      ministack:
+        condition: service_healthy
+    restart: unless-stopped

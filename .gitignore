@@ -6,6 +6,7 @@ vendor/
 dist/
 build/
 cdk.out/
+.cdk-outputs.json
 *.tsbuildinfo
 
 # Env and secrets

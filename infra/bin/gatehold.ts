@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
-import { SeatLockStack } from "../lib/seatlock-stack";
+import { GateholdStack } from "../lib/gatehold-stack";
 
 const app = new cdk.App();
 const stage = String(app.node.tryGetContext("stage") ?? "dev");
 
-new SeatLockStack(app, `SeatLock-${stage}`, {
+new GateholdStack(app, `Gatehold-${stage}`, {
   stage,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1",
   },
-  description: `SeatLock phase-0 foundation (${stage})`,
+  description: `Gatehold phase-0 foundation (${stage})`,
 });

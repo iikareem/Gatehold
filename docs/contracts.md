@@ -45,7 +45,7 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 
 - Event: `evt_001` / `ON_SALE`
 - Seats: `A-12-01` … `A-12-50`, all `AVAILABLE`
-- Tables: `seatlock-{stage}-events`, `seatlock-{stage}-seats`
+- Tables: `gatehold-{stage}-events`, `gatehold-{stage}-seats`
 
 ## TODO (later phases)
 

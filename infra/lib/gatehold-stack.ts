@@ -6,7 +6,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from "constructs";
 
-export interface SeatLockStackProps extends cdk.StackProps {
+export interface GateholdStackProps extends cdk.StackProps {
   stage: string;
 }
 
@@ -14,8 +14,8 @@ export interface SeatLockStackProps extends cdk.StackProps {
  * Phase 0 stack: Events + Seats tables, health Lambda, HTTP API.
  * Later phases add Cognito, holds, SQS, Step Functions, refunds.
  */
-export class SeatLockStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: SeatLockStackProps) {
+export class GateholdStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: GateholdStackProps) {
     super(scope, id, props);
 
     const { stage } = props;
@@ -25,14 +25,14 @@ export class SeatLockStack extends cdk.Stack {
         : cdk.RemovalPolicy.DESTROY;
 
     const eventsTable = new dynamodb.Table(this, "EventsTable", {
-      tableName: `seatlock-${stage}-events`,
+      tableName: `gatehold-${stage}-events`,
       partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: removal,
     });
 
     const seatsTable = new dynamodb.Table(this, "SeatsTable", {
-      tableName: `seatlock-${stage}-seats`,
+      tableName: `gatehold-${stage}-seats`,
       partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "seatId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -40,7 +40,7 @@ export class SeatLockStack extends cdk.Stack {
     });
 
     const healthFn = new NodejsFunction(this, "HealthFn", {
-      functionName: `seatlock-${stage}-health`,
+      functionName: `gatehold-${stage}-health`,
       entry: path.join(__dirname, "../../services/health/src/handler.ts"),
       handler: "handler",
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -67,8 +67,8 @@ export class SeatLockStack extends cdk.Stack {
     eventsTable.grantReadData(healthFn);
     seatsTable.grantReadData(healthFn);
 
-    const api = new apigateway.RestApi(this, "SeatLockApi", {
-      restApiName: `seatlock-${stage}`,
+    const api = new apigateway.RestApi(this, "GateholdApi", {
+      restApiName: `gatehold-${stage}`,
       deployOptions: { stageName: stage },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,

@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-SeatLock needs typed business rules for money and seats, plus concurrency-heavy workers for load generation, sweeping, reconciliation, and auditing.
+Gatehold needs typed business rules for money and seats, plus concurrency-heavy workers for load generation, sweeping, reconciliation, and auditing.
 
 ## Decision
 

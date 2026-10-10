@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   const event: EventItem = {
     eventId: EVENT_ID,
     status: "ON_SALE",
-    name: "SeatLock Demo Night",
+    name: "Gatehold Demo Night",
     createdAt: now,
   };
 

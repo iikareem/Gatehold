@@ -1,8 +1,8 @@
 {
-  "name": "seatlock",
+  "name": "gatehold",
   "version": "0.1.0",
   "private": true,
-  "description": "Serverless ticket-drop backend — concurrency-safe holds, sagas, and mass refunds",
+  "description": "Gatehold — serverless ticket-drop backend with concurrency-safe holds, sagas, and mass refunds",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "seed": "ts-node --transpile-only scripts/seed.ts",

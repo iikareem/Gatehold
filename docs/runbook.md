@@ -1,6 +1,6 @@
 # Runbook
 
-Operational procedures for SeatLock.
+Operational procedures for Gatehold.
 
 ---
 
@@ -53,7 +53,7 @@ CDK turns that infra into **CloudFormation**. Where CloudFormation runs depends 
 
 ## Local AWS with MiniStack
 
-SeatLock uses [MiniStack](https://github.com/ministackorg/ministack) as the local AWS emulator (DynamoDB, Lambda, SQS, Step Functions, EventBridge, etc. on port `4566`).
+Gatehold uses [MiniStack](https://github.com/ministackorg/ministack) as the local AWS emulator (DynamoDB, Lambda, SQS, Step Functions, EventBridge, etc. on port `4566`).
 
 ### Start
 
@@ -69,7 +69,7 @@ Compose also starts **StackPort** on port `8080`. It is a browser UI only — **
 ```bash
 npm run ministack:ui
 # open http://localhost:8080
-# DynamoDB → seatlock-dev-events / seatlock-dev-seats (after deploy + seed)
+# DynamoDB → gatehold-dev-events / gatehold-dev-seats (after deploy + seed)
 ```
 
 ### Load local env
@@ -102,7 +102,7 @@ npm run get-seat
 Stack outputs print an `execute-api` URL. Against MiniStack, call via the emulator edge port (API id = subdomain of `ApiUrl`):
 
 ```bash
-API_ID=$(node -e "const o=require('./.cdk-outputs.json'); const u=o['SeatLock-dev'].ApiUrl; console.log(new URL(u).hostname.split('.')[0])")
+API_ID=$(node -e "const o=require('./.cdk-outputs.json'); const u=o['Gatehold-dev'].ApiUrl; console.log(new URL(u).hostname.split('.')[0])")
 
 curl "http://localhost.localstack.cloud:4566/restapis/${API_ID}/dev/_user_request_/health"
 curl "http://localhost.localstack.cloud:4566/restapis/${API_ID}/dev/_user_request_/health?eventId=evt_001&seatId=A-12-01"
@@ -157,10 +157,10 @@ npm run deploy:aws
 
 # 4) Seed / call API using real outputs — do NOT source MiniStack endpoints
 unset AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3
-export EVENTS_TABLE_NAME=seatlock-dev-events
-export SEATS_TABLE_NAME=seatlock-dev-seats
+export EVENTS_TABLE_NAME=gatehold-dev-events
+export SEATS_TABLE_NAME=gatehold-dev-seats
 npm run seed
-curl "$(node -e "console.log(require('./.cdk-outputs.json')['SeatLock-dev'].ApiUrl)")health"
+curl "$(node -e "console.log(require('./.cdk-outputs.json')['Gatehold-dev'].ApiUrl)")health"
 ```
 
 Destroy when done experimenting:

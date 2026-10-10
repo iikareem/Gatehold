@@ -1,4 +1,4 @@
-# SeatLock
+# Gatehold
 
 Serverless ticket-drop backend on AWS. Prevents double-selling, keeps group bookings atomic, and refunds cancelled events exactly once.
 
@@ -11,7 +11,7 @@ Serverless ticket-drop backend on AWS. Prevents double-selling, keeps group book
 
 ## About
 
-SeatLock is a portfolio project that models the hard parts of a high-demand ticket sale: concurrent seat claiming, group adjacency, payment uncertainty, and mass refunds under rate limits.
+Gatehold is a portfolio project that models the hard parts of a high-demand ticket sale: concurrent seat claiming, group adjacency, payment uncertainty, and mass refunds under rate limits.
 
 It targets a realistic on-sale scenario: tens of thousands of buyers, a few thousand seats, families that need adjacent seats, an unreliable payment provider, and an event that may be cancelled mid-sale.
 
@@ -107,7 +107,7 @@ High-demand ticket sales repeatedly fail in the same ways:
 
 Cancellation makes it worse. Thousands of refunds must pass through a throttled payment provider. Some calls fail. No order should be refunded twice, and none should be forgotten.
 
-SeatLock addresses these failure modes with managed AWS services only.
+Gatehold addresses these failure modes with managed AWS services only.
 
 ## Guarantees
 
@@ -148,7 +148,7 @@ Two questions drive the design:
 
 ## How It Works
 
-SeatLock uses a two-level flow: a cheap concurrency gate, then a durable purchase saga.
+Gatehold uses a two-level flow: a cheap concurrency gate, then a durable purchase saga.
 
 ### Level 1: Hold
 
@@ -165,7 +165,7 @@ AVAILABLE → HELD   (holdId, owner, expiresAt = now + 5 minutes)
 
 ### Group booking
 
-Holding seats one by one risks a partial hold (three of four succeed). SeatLock claims a group atomically:
+Holding seats one by one risks a partial hold (three of four succeed). Gatehold claims a group atomically:
 
 1. The client requests `groupSize` seats in a section, or names specific seats (cap default: 8).
 2. The server reads the row (seat IDs are zero-padded and sorted) and finds consecutive free blocks.
@@ -250,7 +250,7 @@ Every step is idempotent, with retries and backoff, a timeout, and a catch that 
 
 ### Event cancellation and mass refunds
 
-When an event is cancelled, SeatLock stops selling, finishes or fails in-flight purchases, and refunds every paid order.
+When an event is cancelled, Gatehold stops selling, finishes or fails in-flight purchases, and refunds every paid order.
 
 Event lifecycle:
 
@@ -559,7 +559,7 @@ HTTP/1.1 200 OK
 ## Repository Structure
 
 ```
-seatlock/
+gatehold/
 ├── infra/                    # AWS CDK app (TypeScript)
 │   ├── lib/                  # Stacks and constructs
 │   └── bin/

@@ -1,6 +1,6 @@
 # Development Plan
 
-A learn-while-building order for SeatLock. Follow phases in sequence. Each phase has a small vertical slice you can run and verify before moving on.
+A learn-while-building order for Gatehold. Follow phases in sequence. Each phase has a small vertical slice you can run and verify before moving on.
 
 The README describes the finished system. This document is the path to get there without building dependencies in the wrong order.
 

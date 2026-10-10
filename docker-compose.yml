@@ -1,4 +1,4 @@
-# Local AWS emulator for SeatLock development and failure tests.
+# Local AWS emulator for Gatehold development and failure tests.
 # https://github.com/ministackorg/ministack
 #
 # Start:  docker compose up -d
@@ -39,7 +39,7 @@ services:
   #
   # This is NOT a second DynamoDB. MiniStack already provides DynamoDB on :4566.
   # StackPort is only a web console that reads/writes that same emulator.
-  # Open: http://localhost:8080 → DynamoDB → seatlock-dev-seats / seatlock-dev-events
+  # Open: http://localhost:8080 → DynamoDB → gatehold-dev-seats / gatehold-dev-events
   # ---------------------------------------------------------------------------
   stackport:
     image: davireis/stackport:latest

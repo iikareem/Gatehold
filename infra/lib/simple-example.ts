@@ -50,8 +50,8 @@ export class SimpleExampleStack extends cdk.Stack {
     seatsTable.grantReadWriteData(holdSeatFn);
 
     // 4) Put an HTTP API in front of the Lambda
-    const api = new apigateway.RestApi(this, "SeatLockApi", {
-      restApiName: "seatlock-simple",
+    const api = new apigateway.RestApi(this, "GateholdApi", {
+      restApiName: "gatehold-simple",
     });
 
     // POST /holds  →  runs holdSeatFn

@@ -1,4 +1,0 @@
-$kind: http-request
-url: "{{gatewayBase}}/health"
-method: GET
-order: 1000

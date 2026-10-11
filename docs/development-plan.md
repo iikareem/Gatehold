@@ -7,6 +7,7 @@ The README describes the finished system. This document is the path to get there
 Related docs:
 
 - [`contracts.md`](./contracts.md) — seat/order/event shapes and shared payloads
+- [`api.md`](./api.md) — local curl cheat sheet for live endpoints
 - [`runbook.md`](./runbook.md) — local MiniStack and ops procedures
 - [`adr/`](./adr/) — why decisions were made
 

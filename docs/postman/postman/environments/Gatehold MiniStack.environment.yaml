@@ -1,0 +1,10 @@
+name: Gatehold MiniStack
+values:
+  - key: gatewayBase
+    value: 'http://localhost:4566/_aws/execute-api/793b8602/dev'
+  - key: eventId
+    value: evt_001
+  - key: seatId
+    value: A-12-07
+  - key: userId
+    value: alice

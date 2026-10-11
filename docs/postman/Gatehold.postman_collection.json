@@ -1,0 +1,109 @@
+{
+  "info": {
+    "name": "Gatehold (local MiniStack)",
+    "description": "Fresh Phase 0–1 collection.\n\n1. Import this file + Gatehold.postman_environment.json\n2. Top-right: select environment Gatehold MiniStack\n3. Use Desktop Agent\n4. Run 1 → 7",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health — liveness",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{gatewayBase}}/health"
+      }
+    },
+    {
+      "name": "2. Health — get seat",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId=A-12-01"
+      }
+    },
+    {
+      "name": "3. Hold — single seat (201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{userId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatIds\": [\"{{seatId}}\"]\n}"
+        },
+        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+      }
+    },
+    {
+      "name": "4. Hold — conflict (409)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "bob"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatIds\": [\"{{seatId}}\"]\n}"
+        },
+        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+      }
+    },
+    {
+      "name": "5. Hold — bad body empty (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatIds\": []\n}"
+        },
+        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+      }
+    },
+    {
+      "name": "6. Hold — bad body two seats (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatIds\": [\"A-12-01\", \"A-12-02\"]\n}"
+        },
+        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+      }
+    },
+    {
+      "name": "7. Health — confirm held seat",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
+      }
+    }
+  ]
+}

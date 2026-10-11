@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Fresh Phase 0–1 collection.
+
+  1. Import this file + Gatehold.postman_environment.json
+  2. Top-right: select environment Gatehold MiniStack
+  3. Use Desktop Agent
+  4. Run 1 → 7

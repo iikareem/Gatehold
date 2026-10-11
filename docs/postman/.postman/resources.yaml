@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: fa830c80-80a5-4303-8496-550d047f2bea
+
+cloudResources:
+  collections:
+    ../postman/collections/Gatehold (local MiniStack): 7be56a67-54d7-418b-abd8-c88400544e93
+
+# All resources in the `postman/` folder are automatically registered in Local View.
+# Point to additional files outside the `postman/` folder to register them individually. Example:
+#localResources:
+#  collections:
+#    - ../tests/E2E Test Collection/

@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{gatewayBase}}/events/{{eventId}}/holds"
+method: POST
+headers:
+  Content-Type: application/json
+  X-User-Id: bob
+body:
+  type: text
+  content: |-
+    {
+      "seatIds": ["{{seatId}}"]
+    }
+order: 4000

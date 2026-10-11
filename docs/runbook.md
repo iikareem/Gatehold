@@ -97,7 +97,9 @@ npm run seed
 npm run get-seat
 ```
 
-### Smoke-test the health API (local)
+### Smoke-test APIs (local)
+
+Copy-paste curls for every live endpoint (health + hold): [`api.md`](./api.md).
 
 Stack outputs print an `execute-api` URL. Against MiniStack, call via the emulator edge port (API id = subdomain of `ApiUrl`):
 

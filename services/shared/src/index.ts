@@ -8,6 +8,12 @@ export type {
 
 export { requireEnv, optionalEnv } from "./env";
 export { createDynamoDBClient, getDocClient } from "./dynamodb";
+export {
+  HOLD_DURATION_MS,
+  buildHoldSeatUpdateInput,
+  holdExpiresAt,
+  type HoldSeatUpdateParams,
+} from "./hold";
 
 /** Zero-pad a seat number so row range queries sort correctly (e.g. 7 → "07"). */
 export function formatSeatId(

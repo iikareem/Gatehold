@@ -89,9 +89,8 @@ This is a learning and portfolio system, not production ticketing software. Paym
 17. [Security](#security)
 18. [Cost](#cost)
 19. [Roadmap](#roadmap) ([detailed plan](docs/development-plan.md))
-20. [What I Learned](#what-i-learned)
-21. [Limitations](#limitations)
-22. [License](#license)
+20. [Limitations](#limitations)
+21. [License](#license)
 
 ---
 
@@ -816,24 +815,6 @@ Possible extensions:
 - Postgres ledger for a relational comparison
 - Purchase analytics with Kinesis Firehose, S3, and Athena
 - Partial cancellation (refund selected ticket types only)
-
----
-
-## What I Learned
-
-_Filled in as the project is built._
-
-- Phase 0: Lambdas inside MiniStack Docker cannot use `localhost` for DynamoDB — the endpoint must be `host.docker.internal`. `aws-cdk-local` v3 also needs both `AWS_ENDPOINT_URL` and `AWS_ENDPOINT_URL_S3`.
-- DynamoDB conditional writes and `TransactWriteItems` under contention
-- Hold expiry vs payment in flight (`PAYING` / `payUntil`)
-- Idempotency for orders, payments, and refunds
-- Step Functions saga design and compensation paths
-- Group booking: adjacent blocks, overlap conflicts, bounded retries
-- Mass refunds under provider rate limits (backpressure, DLQ, replay)
-- Tuning refund worker concurrency and observing throttle behavior
-- What broke under load, and what I would redesign next time
-
----
 
 ## Limitations
 

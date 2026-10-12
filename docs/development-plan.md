@@ -103,27 +103,55 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 2 — Hold expiry correctness
+## Phase 2 — Hold expiry correctness (sweeper logic)
 
-**Goal:** Holds are time-bounded without trusting DynamoDB TTL for correctness.
+**Goal:** Holds are time-bounded without trusting DynamoDB TTL for correctness. Prove the Go sweeper by hand before wiring a schedule.
 
 **Build**
 
 - Every read/decision path that cares about a hold checks `expiresAt < now`
-- Optional DynamoDB TTL attribute only for cleanup, never for “is this free?”
-- `hold-sweeper` (Go) stub → real: scan/query expired `HELD` seats and return them to `AVAILABLE` if still expired and not `PAYING`
-- Schedule later with EventBridge Scheduler; for now, run the sweeper by hand or on a short local loop
-- Test: hold expires → next buyer can take the seat; sweeper is belt-and-suspenders
+- Do **not** use DynamoDB TTL to free seats (reminder only — seats stay as items; flip `HELD` → `AVAILABLE`)
+- `hold-sweeper` (Go): Scan expired `HELD` seats and return them to `AVAILABLE` if still expired and not `PAYING` (conditional update; idempotent)
+- Run with `go run` against MiniStack (no EventBridge yet)
+- Test: hold expires → next buyer can take the seat; sweeper run twice does not break seats
 
 **Learn**
 
-- TTL lag vs decision-time checks
-- Why a sweeper alone is not the source of truth
+- Why decision-time `expiresAt` checks beat TTL for correctness
+- Why a sweeper alone is not the source of truth (belt-and-suspenders)
 
 **Done when**
 
-- Expiry is enforced in hold logic with the clock, not only by the sweeper
-- Sweeper is idempotent (running twice does not break seats)
+- Manual sweeper run clears expired holds on MiniStack
+- Sweeper is idempotent
+
+**Status:** Done (manual `go run ./hold-sweeper` against MiniStack). Sweeper keeps table/UI honest; Phase 1 hold condition remains the concurrency gate. Unit tests deferred. Do not start Phase 2b until you want scheduling.
+
+---
+
+## Phase 2b — Schedule the sweeper (EventBridge Scheduler)
+
+**Goal:** Run the proven sweeper on a timer so expired holds get cleaned without a manual `go run`.
+
+**Prerequisite:** Phase 2 sweeper logic works by hand.
+
+**Build**
+
+- Package `hold-sweeper` as a Go Lambda (CDK)
+- EventBridge Scheduler rule → invoke sweeper on an interval (e.g. every 1–5 minutes locally)
+- Same env as other Lambdas (`SEATS_TABLE_NAME`, MiniStack `AWS_ENDPOINT_URL` when local)
+- Confirm: create a hold, wait past `expiresAt`, wait for schedule (or force invoke) → seat becomes `AVAILABLE`
+
+**Learn**
+
+- EventBridge Scheduler vs EventBridge bus (Phase 7 is the bus for notifications)
+- Scheduled Lambda packaging for Go
+
+**Done when**
+
+- Scheduler (or forced invoke of the deployed Lambda) releases an expired hold without `go run`
+
+**Note:** Phase 7 EventBridge is still for **domain events** (streams → email/audit). Scheduler here is only the **timer** for the sweeper.
 
 ---
 
@@ -451,19 +479,20 @@ Use these as “I can show this” moments while learning:
 ```text
 0 Foundations
  └── 1 Single-seat hold
-      └── 2 Expiry + sweeper
-           └── 3 Group holds
-                └── 4 Orders + idempotency + SQS
-                     └── 5 Mock payment
-                          └── 6 Saga + ledger + PAYING
-                               ├── 7 Streams / notifications
-                               ├── 8 Cognito + IAM + secrets
-                               ├── 9 Signed tickets
-                               └── 10 Cancel + refunds
-                                    └── 11 Reconciler + auditor
-                                         └── 12 Observability
-                                              └── 13 Load / failure / results
-                                                   └── 14 CI/CD (optional)
+      └── 2 Expiry + sweeper logic (manual go run)
+           └── 2b EventBridge Scheduler → sweeper Lambda
+                └── 3 Group holds
+                     └── 4 Orders + idempotency + SQS
+                          └── 5 Mock payment
+                               └── 6 Saga + ledger + PAYING
+                                    ├── 7 Streams / EventBridge bus / notifications
+                                    ├── 8 Cognito + IAM + secrets
+                                    ├── 9 Signed tickets
+                                    └── 10 Cancel + refunds
+                                         └── 11 Reconciler + auditor
+                                              └── 12 Observability
+                                                   └── 13 Load / failure / results
+                                                        └── 14 CI/CD (optional)
 ```
 
 Phases 7–9 can overlap slightly after Phase 6, but **Phase 10 must not start** until capture + ledger + mock refunds work.
@@ -475,8 +504,9 @@ Phases 7–9 can overlap slightly after Phase 6, but **Phase 10 must not start**
 Copy into a notebook or tick in place:
 
 - [x] Phase 0 — Local loop and shared foundations
-- [ ] Phase 1 — Single-seat hold
-- [ ] Phase 2 — Hold expiry correctness
+- [x] Phase 1 — Single-seat hold
+- [x] Phase 2 — Hold expiry correctness (sweeper logic)
+- [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda
 - [ ] Phase 3 — Group holds
 - [ ] Phase 4 — Orders, idempotency, SQS
 - [ ] Phase 5 — Mock payment provider

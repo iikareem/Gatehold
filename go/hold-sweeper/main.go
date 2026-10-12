@@ -1,10 +1,28 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"log"
+	"os"
+
+	"github.com/aws/aws-lambda-go/lambda"
+)
 
 // Hold sweeper — releases expired holds that were never converted to PAYING/SOLD.
-// TODO: scheduled Lambda; check expiresAt; never trust DynamoDB TTL alone.
+// Phase 2: manual go run against MiniStack. Phase 2b: EventBridge Scheduler → Lambda.
 
 func main() {
-	fmt.Println("TODO: hold-sweeper")
+	if os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
+		lambda.Start(handler)
+		return
+	}
+
+	if err := Run(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// handler ignores the Scheduler payload and runs one sweep.
+func handler(ctx context.Context) error {
+	return Run(ctx)
 }

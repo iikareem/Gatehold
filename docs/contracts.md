@@ -96,9 +96,36 @@ UpdateItem
 
 Shared TypeScript builder: `buildHoldSeatUpdateInput` in `services/shared/src/hold.ts`.
 
+## Phase 2 — Hold sweeper (release expired holds)
+
+**Role:** Background cleaner (Go `hold-sweeper`). Not the concurrency gate — Phase 1 hold condition still allows reclaim on the next `POST /holds`. Sweeper keeps the table/UI honest (`AVAILABLE` instead of stale `HELD`).
+
+**Do not use DynamoDB TTL** to free seats. Seat items stay; only status/hold fields change.
+
+### Transition
+
+```
+HELD + expiresAt < now  →  AVAILABLE
+  REMOVE holdId, holdOwner, expiresAt
+```
+
+### Conditional write (idempotent)
+
+```
+UpdateItem
+  SET #status = AVAILABLE
+  REMOVE holdId, holdOwner, expiresAt
+  CONDITION #status = HELD AND expiresAt < :now
+```
+
+- If the seat was already released, moved to `PAYING`/`SOLD`, or a new hold extended `expiresAt`, the condition fails → skip (safe to run twice).
+- Phase 2 discovery: **Scan** seats (filter `status = HELD`, then check `expiresAt`). No seats GSI yet.
+
+Implementation: `go/hold-sweeper` under module `github.com/iikareem/Gatehold/go` (manual `go run ./hold-sweeper` from `go/` in Phase 2; EventBridge Scheduler in Phase 2b).
+
 ## TODO (later phases)
 
-- Conditional write expressions for confirm / release
+- Conditional write expressions for confirm / payment release
 - Idempotency key formats (order, payment, refund)
 - SQS message shapes (order enqueue, refund job)
 - EventBridge detail types (email, audit, analytics)

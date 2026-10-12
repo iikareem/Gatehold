@@ -639,7 +639,7 @@ Set a billing alarm before deploying.
 
 ```bash
 npm test                    # unit and integration tests
-go test -race ./go/...      # Go tests with the race detector
+cd go && go test -race ./...   # Go tests with the race detector
 npm run test:failure        # failure-injection scenarios
 ```
 
@@ -792,8 +792,9 @@ Implementation order for learning while building lives in [`docs/development-pla
 Summary (details, “done when”, and what not to skip are in the plan):
 
 - [x] Phase 0: Local MiniStack loop, shared types, seed event/seats
-- [ ] Phase 1: Single-seat hold (conditional write)
-- [ ] Phase 2: Hold expiry checks + sweeper
+- [x] Phase 1: Single-seat hold (conditional write)
+- [x] Phase 2: Hold expiry checks + sweeper logic (manual)
+- [ ] Phase 2b: EventBridge Scheduler → sweeper Lambda
 - [ ] Phase 3: Group holds (`TransactWriteItems`, block search)
 - [ ] Phase 4: Orders, idempotency, SQS (+ DLQ)
 - [ ] Phase 5: Mock payment provider (Go)

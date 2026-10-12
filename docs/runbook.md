@@ -112,6 +112,36 @@ curl "http://localhost.localstack.cloud:4566/restapis/${API_ID}/dev/_user_reques
 
 Flow: your curl → MiniStack API Gateway → health Lambda → DynamoDB (same emulator).
 
+### Phase 2 — Hold sweeper (manual)
+
+The sweeper cleans stale `HELD` rows in DynamoDB/UI. Phase 1’s hold condition (`expiresAt < now`) remains the concurrency gate — the sweeper is belt-and-suspenders, not EventBridge yet (Phase 2b).
+
+```bash
+# Env (same MiniStack vars as seed)
+set -a && source .env.example && set +a
+
+# 1) Hold a seat (Postman or curl — see api.md)
+API_ID=$(node -e "const o=require('./.cdk-outputs.json'); console.log(new URL(o['Gatehold-dev'].ApiUrl).hostname.split('.')[0])")
+BASE="http://localhost:4566/_aws/execute-api/${API_ID}/dev"
+curl -sS -X POST "$BASE/events/evt_001/holds" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: alice" \
+  -d '{"seatIds":["A-12-20"]}'
+
+# 2) Age expiresAt to the past (or wait 5 minutes)
+# StackPort UI, or a one-liner UpdateItem — keep status=HELD
+
+# 3) Run sweeper
+cd go && go run ./hold-sweeper
+# expect: released >= 1; seat becomes AVAILABLE; holdId/holdOwner/expiresAt cleared
+
+# 4) Idempotent second run
+go run ./hold-sweeper
+# expect: no error; seat still AVAILABLE
+
+SEAT_ID=A-12-20 npm run get-seat
+```
+
 ### Reset state between test runs
 
 ```bash
@@ -182,6 +212,7 @@ npm run destroy:aws
 | `deploy:aws` / `destroy:aws` | CDK → real AWS via `cdk` |
 | `seed` / `get-seat` | AWS SDK helpers (follow `AWS_ENDPOINT_URL` if set) |
 | `build` | Typecheck |
+| `cd go && go run ./hold-sweeper` | Phase 2: release expired HELD seats (needs env sourced) |
 
 ---
 
@@ -192,6 +223,12 @@ npm run destroy:aws
 - [x] `npm run seed` + `npm run get-seat`
 - [x] `GET .../health?eventId=evt_001&seatId=A-12-01` returns the seat
 - [x] StackPort UI available at http://localhost:8080
+
+## Phase 2 checklist
+
+- [x] `go run ./hold-sweeper` clears expired `HELD` → `AVAILABLE` on MiniStack
+- [x] Second sweeper run is idempotent (no error; seat stays `AVAILABLE`)
+- [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda (later)
 
 ## TODO (later)
 

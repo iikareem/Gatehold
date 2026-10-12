@@ -1,0 +1,5 @@
+$kind: http-request
+name: '1. Health — liveness'
+method: GET
+url: '{{gatewayBase}}/health'
+order: 1000

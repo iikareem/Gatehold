@@ -1,0 +1,10 @@
+$kind: http-request
+name: '2. Health — get seat'
+method: GET
+url: '{{gatewayBase}}/health?eventId={{eventId}}&seatId=A-12-01'
+queryParams:
+  - key: eventId
+    value: '{{eventId}}'
+  - key: seatId
+    value: A-12-01
+order: 2000

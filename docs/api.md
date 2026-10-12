@@ -2,7 +2,7 @@
 
 Endpoints implemented so far (Phase 0–1). Use this to hit MiniStack **one call at a time**.
 
-**Postman:** delete old Gatehold items, then import both files under [`postman/`](./postman/) — steps in [`postman/README.md`](./postman/README.md).
+**Postman:** delete old Gatehold items, then import both files under [`../postman/`](../postman/) — steps in [`../postman/README.md`](../postman/README.md).
 
 Contracts / shapes: [`contracts.md`](./contracts.md). Ops / deploy: [`runbook.md`](./runbook.md).
 

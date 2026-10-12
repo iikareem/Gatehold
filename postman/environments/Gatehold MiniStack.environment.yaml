@@ -1,0 +1,19 @@
+name: Gatehold MiniStack
+values:
+  - key: gatewayBase
+    value: 'http://localhost:4566/_aws/execute-api/bfab6647/dev'
+    enabled: true
+    type: default
+    description: MiniStack API edge. Update API id after reset/redeploy.
+  - key: eventId
+    value: evt_001
+    enabled: true
+    type: default
+  - key: seatId
+    value: A-12-07
+    enabled: true
+    type: default
+  - key: userId
+    value: alice
+    enabled: true
+    type: default

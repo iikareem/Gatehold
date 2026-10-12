@@ -4,6 +4,8 @@ import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
+import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import { Construct } from "constructs";
 
 export interface GateholdStackProps extends cdk.StackProps {
@@ -11,7 +13,8 @@ export interface GateholdStackProps extends cdk.StackProps {
 }
 
 /**
- * Phase 0–1 stack: Events + Seats tables, health + hold-seat Lambdas, HTTP API.
+ * Phase 0–2b stack: Events + Seats, health + hold-seat + hold-sweeper,
+ * HTTP API, EventBridge Scheduler → sweeper.
  * Later phases add Cognito, group holds, SQS, Step Functions, refunds.
  */
 export class GateholdStack extends cdk.Stack {
@@ -81,9 +84,32 @@ export class GateholdStack extends cdk.Stack {
       projectRoot,
     });
 
+    // Go custom runtime: zip built by `npm run build:hold-sweeper` (bootstrap).
+    const holdSweeperFn = new lambda.Function(this, "HoldSweeperFn", {
+      functionName: `gatehold-${stage}-hold-sweeper`,
+      runtime: lambda.Runtime.PROVIDED_AL2023,
+      architecture: lambda.Architecture.X86_64,
+      handler: "bootstrap",
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, "../../go/hold-sweeper/dist/hold-sweeper.zip"),
+      ),
+      timeout: cdk.Duration.seconds(60),
+      memorySize: 256,
+      environment: lambdaEnv,
+    });
+
     eventsTable.grantReadData(healthFn);
     seatsTable.grantReadData(healthFn);
     seatsTable.grantReadWriteData(holdSeatFn);
+    seatsTable.grantReadWriteData(holdSweeperFn);
+
+    // Timer only (not the Phase 7 domain event bus).
+    new scheduler.Schedule(this, "HoldSweeperSchedule", {
+      scheduleName: `gatehold-${stage}-hold-sweeper`,
+      description: "Release expired HELD seats (hold-sweeper)",
+      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(1)),
+      target: new targets.LambdaInvoke(holdSweeperFn),
+    });
 
     const api = new apigateway.RestApi(this, "GateholdApi", {
       restApiName: `gatehold-${stage}`,
@@ -118,6 +144,9 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "HoldSeatFunctionName", {
       value: holdSeatFn.functionName,
+    });
+    new cdk.CfnOutput(this, "HoldSweeperFunctionName", {
+      value: holdSweeperFn.functionName,
     });
   }
 }

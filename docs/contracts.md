@@ -47,43 +47,48 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 - Seats: `A-12-01` … `A-12-50`, all `AVAILABLE`
 - Tables: `gatehold-{stage}-events`, `gatehold-{stage}-seats`
 
-## Phase 1 — Single-seat hold
-
-### `POST /events/{eventId}/holds`
+## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
 **Auth stub (until Phase 8 Cognito):** read `X-User-Id` header; if missing, use `test-user`. Never trust a `userId` from the body.
 
-**Request body (Phase 1):**
+**Request body:**
 
 ```json
 { "seatIds": ["A-12-07"] }
 ```
 
-- `seatIds` must be length exactly `1` (group holds are Phase 3).
+or a group (same shape):
+
+```json
+{ "seatIds": ["A-12-10", "A-12-11", "A-12-12", "A-12-13"] }
+```
+
+- `seatIds` length **1..8** (`MAX_HOLD_SEATS`). Cap → `400`.
 - Path `eventId` is the event partition key.
+- This slice is **explicit `seatIds` only** (no `groupSize` / server block search yet).
 
 **Success — `201 Created`:**
 
 ```json
 {
   "holdId": "h_…",
-  "seatIds": ["A-12-07"],
+  "seatIds": ["A-12-10", "A-12-11", "A-12-12", "A-12-13"],
   "expiresAt": "2026-11-01T20:05:00.000Z"
 }
 ```
 
-**Conflict — `409`:** seat is `HELD` with `expiresAt >= now`, or otherwise not claimable (`PAYING` / `SOLD`). Loser leaves no partial state (single conditional `UpdateItem`).
+All listed seats share one `holdId` and one `expiresAt`.
 
-**Bad request — `400`:** missing/invalid body, empty `seatIds`, or length ≠ 1.
+**Conflict — `409`:** any seat is not claimable (`HELD` with `expiresAt >= now`, or `PAYING` / `SOLD`). DynamoDB cancels the whole `TransactWriteItems` → **zero seats held** (no half-holds). Response includes `eventId` and the requested `seatIds`.
+
+**Bad request — `400`:** missing/invalid body, empty `seatIds`, length `> 8`, or a non-empty-string entry.
 
 **Hold duration:** `expiresAt = now + 5 minutes` (`HOLD_DURATION_MS` in `services/shared`).
 
-### Conditional write (concurrency gate)
-
-Use a **direct** `UpdateItem` with a condition — not Get-then-Update / check-then-act. The condition is evaluated atomically with the write.
+### Per-seat condition (same as Phase 1)
 
 ```
-UpdateItem
+Update (each seat in the transaction)
   SET status = HELD,
       holdId = :holdId,
       holdOwner = :holdOwner,
@@ -92,9 +97,20 @@ UpdateItem
          OR (status = HELD AND expiresAt < :now)
 ```
 
-`version` stays on the seat item but is **optional for Phase 1** — not in CONDITION, not in SET. Use it later when a path does check-then-act application logic and needs optimistic locking.
+### Group write (Phase 3)
 
-Shared TypeScript builder: `buildHoldSeatUpdateInput` in `services/shared/src/hold.ts`.
+```
+TransactWriteItems [
+  Update seat …   (same SET + CONDITION)
+  …
+]
+```
+
+Any condition failure → `TransactionCanceledException` → API `409`. Always use a transaction (even for length 1).
+
+`version` stays on the seat item but is **optional** — not in CONDITION, not in SET.
+
+Shared builders: `buildHoldSeatUpdateInput`, `buildHoldSeatsTransactWriteInput` in `services/shared/src/hold.ts`.
 
 ## Phase 2 — Hold sweeper (release expired holds)
 

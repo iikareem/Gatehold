@@ -1,5 +1,5 @@
 $kind: http-request
-name: '6. Hold — bad body two seats (400)'
+name: '8. Hold — bad body too many seats (400)'
 method: POST
 url: '{{gatewayBase}}/events/{{eventId}}/holds'
 headers:
@@ -9,6 +9,6 @@ body:
   type: json
   content: |-
     {
-      "seatIds": ["A-12-01", "A-12-02"]
+      "seatIds": ["A-12-01","A-12-02","A-12-03","A-12-04","A-12-05","A-12-06","A-12-07","A-12-08","A-12-09"]
     }
-order: 6000
+order: 8000

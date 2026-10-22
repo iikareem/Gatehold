@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Phase 0–1 collection from docs/api.md.\n\n1. Import this file + Gatehold.postman_environment.json\n2. Top-right: select environment Gatehold MiniStack\n3. Use Desktop Agent\n4. Run 1 → 7 in order",
+    "description": "Phase 0–3 collection from docs/api.md.\n\n1. Import this file + Gatehold.postman_environment.json\n2. Top-right: select environment Gatehold MiniStack\n3. Use Desktop Agent\n4. Run 1 → 8 in order",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -74,15 +74,16 @@
       }
     },
     {
-      "name": "6. Hold — bad body two seats (400)",
+      "name": "6. Hold — group seats (201)",
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"seatIds\": [\"A-12-01\", \"A-12-02\"]\n}"
+          "raw": "{\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"]\n}"
         },
         "url": "{{gatewayBase}}/events/{{eventId}}/holds"
       }
@@ -101,6 +102,20 @@
             { "key": "seatId", "value": "{{seatId}}" }
           ]
         }
+      }
+    },
+    {
+      "name": "8. Hold — bad body too many seats (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatIds\": [\"A-12-01\",\"A-12-02\",\"A-12-03\",\"A-12-04\",\"A-12-05\",\"A-12-06\",\"A-12-07\",\"A-12-08\",\"A-12-09\"]\n}"
+        },
+        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
       }
     }
   ]

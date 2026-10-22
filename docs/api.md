@@ -140,13 +140,37 @@ curl -sS -X POST "$BASE/events/evt_001/holds" \
 {
   "message": "seat not available",
   "eventId": "evt_001",
-  "seatId": "A-12-07"
+  "seatIds": ["A-12-07"]
 }
 ```
 
 ---
 
-## 5. Hold — bad request
+## 5. Hold — group (multi-seat)
+
+```bash
+curl -sS -X POST "$BASE/events/evt_001/holds" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: alice" \
+  -d '{"seatIds":["A-12-30","A-12-31"]}' | jq .
+```
+
+**Expect `201`** with both `seatIds` and one `holdId`.
+
+Overlap (second client shares a seat):
+
+```bash
+curl -sS -X POST "$BASE/events/evt_001/holds" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: bob" \
+  -d '{"seatIds":["A-12-31","A-12-32"]}' | jq .
+```
+
+**Expect `409`** — nothing new held (no half-hold on `A-12-32`).
+
+---
+
+## 6. Hold — bad request
 
 ```bash
 # empty seatIds
@@ -154,17 +178,17 @@ curl -sS -X POST "$BASE/events/evt_001/holds" \
   -H "content-type: application/json" \
   -d '{"seatIds":[]}' | jq .
 
-# two seats (Phase 3 only)
+# over cap (max 8)
 curl -sS -X POST "$BASE/events/evt_001/holds" \
   -H "content-type: application/json" \
-  -d '{"seatIds":["A-12-01","A-12-02"]}' | jq .
+  -d '{"seatIds":["A-12-01","A-12-02","A-12-03","A-12-04","A-12-05","A-12-06","A-12-07","A-12-08","A-12-09"]}' | jq .
 ```
 
 **Expect `400`.**
 
 ---
 
-## 6. Hold — reclaim expired seat (optional)
+## 7. Hold — reclaim expired seat (optional)
 
 If you manually set a seat’s `expiresAt` to the past in StackPort / SDK while keeping `status=HELD`, a new hold should succeed (`201`). Live holds still return `409`.
 
@@ -180,8 +204,10 @@ Hold length: **5 minutes**. Waiting that long also works; no sweeper required fo
 | 2 | `GET /health?eventId&seatId` | seat JSON |
 | 3 | `POST .../holds` (alice, free seat) | `201` |
 | 4 | Same seat again (bob) | `409` |
-| 5 | Bad body | `400` |
-| 6 | Re-check seat via health | `HELD` |
+| 5 | Group hold (2 seats) | `201` |
+| 6 | Overlapping group | `409` |
+| 7 | Bad body (empty / >8) | `400` |
+| 8 | Re-check seat via health | `HELD` |
 
 ---
 
@@ -201,6 +227,6 @@ npm run seed
 
 Do not expect these to work:
 
-- Group holds (`groupSize` / multi-seat) — Phase 3
+- `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
 - `POST /orders`, payment, saga — later phases
 - Cognito JWT — Phase 8 (`X-User-Id` stub only)

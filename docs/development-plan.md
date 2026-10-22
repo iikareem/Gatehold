@@ -157,28 +157,34 @@ Start the next unfinished phase below.
 
 ## Phase 3 — Group holds (all or nothing)
 
-**Goal:** Adjacent seats held completely or not at all.
+**Goal:** Multiple seats held completely or not at all.
 
-**Build**
+**Built (this slice — explicit `seatIds` only)**
 
-- Request shapes: `groupSize` + `section` (+ `adjacent`), or explicit `seatIds` (cap, default 8)
-- Server-side block search over a sorted row (`seatId` zero-padded)
-- `TransactWriteItems` for the block; on conflict, try next block with jittered backoff, bounded attempts
-- Overlap test: two groups sharing a seat → one clean win, zero half-holds
-- Update `contracts.md` for group hold request/response
+- Body `{ "seatIds": [...] }` with length **1..8** (`MAX_HOLD_SEATS`)
+- `TransactWriteItems` over the list; same SET/CONDITION per seat as Phase 1
+- `TransactionCanceledException` → `409`; zero half-holds
+- Update `contracts.md` / Postman / `docs/api.md`
+
+**Deferred (optional later)**
+
+- `groupSize` + `section` (+ `adjacent`) and server-side block search
+- Jittered retry across candidate blocks
 
 **Learn**
 
-- DynamoDB transactions, per-item cancellation, 2× write cost
-- Why the client must not pick adjacency alone
+- DynamoDB transactions, cancellation → HTTP conflict, ~2× write cost
+- Client sends the seats; server guarantees atomicity
 
 **Done when**
 
-- Partial free block → transaction rejected, nothing held
+- Multi-seat hold succeeds with one `holdId`
 - Overlapping groups never leave a partial hold
-- Cap rejected with a clear `400`
+- Cap / empty rejected with a clear `400`
 
 **Prerequisite:** Phase 1 conditions are solid; group path reuses the same SET/CONDITION per seat.
+
+**Status:** Done (seatIds path).
 
 ---
 
@@ -507,7 +513,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 1 — Single-seat hold
 - [x] Phase 2 — Hold expiry correctness (sweeper logic)
 - [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda
-- [ ] Phase 3 — Group holds
+- [x] Phase 3 — Group holds (explicit `seatIds` + `TransactWriteItems`)
 - [ ] Phase 4 — Orders, idempotency, SQS
 - [ ] Phase 5 — Mock payment provider
 - [ ] Phase 6 — Purchase saga

@@ -794,7 +794,7 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 1: Single-seat hold (conditional write)
 - [x] Phase 2: Hold expiry checks + sweeper logic (manual)
 - [ ] Phase 2b: EventBridge Scheduler → sweeper Lambda
-- [ ] Phase 3: Group holds (`TransactWriteItems`, block search)
+- [x] Phase 3: Group holds (`seatIds` 1..8 + `TransactWriteItems`; block search deferred)
 - [ ] Phase 4: Orders, idempotency, SQS (+ DLQ)
 - [ ] Phase 5: Mock payment provider (Go)
 - [ ] Phase 6: Step Functions saga, ledger, `PAYING` / compensation

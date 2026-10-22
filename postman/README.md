@@ -10,7 +10,7 @@ Canonical location for the Gatehold API collection. Matches [`docs/api.md`](../d
    - [`Gatehold.postman_environment.json`](./Gatehold.postman_environment.json)
 3. Top-right → select **Gatehold MiniStack**
 4. Agent → **Desktop Agent** (not Cloud)
-5. Run **1. Health — liveness** → expect `200` with `"ok": true`
+5. Run **1 → 8** in order (includes group hold + too-many `400`)
 
 ## After reset / redeploy
 

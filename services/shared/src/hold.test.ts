@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   HOLD_DURATION_MS,
   buildHoldSeatUpdateInput,
+  buildHoldSeatsTransactWriteInput,
   holdExpiresAt,
 } from "./hold";
 
@@ -41,6 +42,38 @@ describe("buildHoldSeatUpdateInput", () => {
     assert.equal(
       input.ExpressionAttributeValues[":now"],
       "2026-11-01T20:00:00.000Z",
+    );
+  });
+});
+
+describe("buildHoldSeatsTransactWriteInput", () => {
+  const input = buildHoldSeatsTransactWriteInput({
+    tableName: "gatehold-dev-seats",
+    eventId: "evt_001",
+    seatIds: ["A-12-10", "A-12-11"],
+    holdId: "h_group",
+    holdOwner: "alice",
+    expiresAt: "2026-11-01T20:05:00.000Z",
+    now: "2026-11-01T20:00:00.000Z",
+  });
+
+  it("wraps one Update per seat with the same holdId", () => {
+    assert.equal(input.TransactItems.length, 2);
+    assert.deepEqual(input.TransactItems[0].Update.Key, {
+      eventId: "evt_001",
+      seatId: "A-12-10",
+    });
+    assert.deepEqual(input.TransactItems[1].Update.Key, {
+      eventId: "evt_001",
+      seatId: "A-12-11",
+    });
+    assert.equal(
+      input.TransactItems[0].Update.ExpressionAttributeValues[":holdId"],
+      "h_group",
+    );
+    assert.equal(
+      input.TransactItems[1].Update.ExpressionAttributeValues[":holdId"],
+      "h_group",
     );
   });
 });

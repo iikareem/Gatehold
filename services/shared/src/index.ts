@@ -11,8 +11,10 @@ export { createDynamoDBClient, getDocClient } from "./dynamodb";
 export {
   HOLD_DURATION_MS,
   buildHoldSeatUpdateInput,
+  buildHoldSeatsTransactWriteInput,
   holdExpiresAt,
   type HoldSeatUpdateParams,
+  type HoldSeatsTransactParams,
 } from "./hold";
 
 /** Zero-pad a seat number so row range queries sort correctly (e.g. 7 → "07"). */

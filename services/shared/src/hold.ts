@@ -1,4 +1,4 @@
-/** Single-seat hold helpers — keep expressions in sync with docs/contracts.md */
+/** Hold helpers — keep expressions in sync with docs/contracts.md */
 
 /** Hold length for Phase 1 (matches README: now + 5 minutes). */
 export const HOLD_DURATION_MS = 5 * 60 * 1000;
@@ -12,6 +12,16 @@ export interface HoldSeatUpdateParams {
   /** ISO-8601 expiry written to the item */
   expiresAt: string;
   /** ISO-8601 "now" used in the condition (reclaim if expiresAt < now) */
+  now: string;
+}
+
+export interface HoldSeatsTransactParams {
+  tableName: string;
+  eventId: string;
+  seatIds: string[];
+  holdId: string;
+  holdOwner: string;
+  expiresAt: string;
   now: string;
 }
 
@@ -42,6 +52,31 @@ export function buildHoldSeatUpdateInput(params: HoldSeatUpdateParams) {
       ":expiresAt": expiresAt,
       ":now": now,
     },
+  };
+}
+
+/**
+ * Builds TransactWriteCommand input: one Update per seat, same SET/CONDITION.
+ * Pure — handler only does `new TransactWriteCommand(buildHoldSeatsTransactWriteInput(...))`.
+ */
+export function buildHoldSeatsTransactWriteInput(
+  params: HoldSeatsTransactParams,
+) {
+  const { tableName, eventId, seatIds, holdId, holdOwner, expiresAt, now } =
+    params;
+
+  return {
+    TransactItems: seatIds.map((seatId) => ({
+      Update: buildHoldSeatUpdateInput({
+        tableName,
+        eventId,
+        seatId,
+        holdId,
+        holdOwner,
+        expiresAt,
+        now,
+      }),
+    })),
   };
 }
 

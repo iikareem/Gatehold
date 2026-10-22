@@ -3,9 +3,9 @@ import type {
   APIGatewayProxyEvent,
   APIGatewayProxyResult,
 } from "aws-lambda";
-import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import {
-  buildHoldSeatUpdateInput,
+  buildHoldSeatsTransactWriteInput,
   getDocClient,
   holdExpiresAt,
   requireEnv,
@@ -13,9 +13,11 @@ import {
 
 const AUTH_STUB_USER = "test-user";
 
+/** Max seats per hold request (Phase 3 seatIds path). */
+export const MAX_HOLD_SEATS = 8;
+
 /**
- * Phase 1 — single-seat hold.
- * POST /events/{eventId}/holds  body: { "seatIds": ["A-12-07"] }
+ * Phase 3 — hold 1..MAX_HOLD_SEATS seats via TransactWriteItems.
  * Auth stub: X-User-Id header, else test-user (Cognito in Phase 8).
  */
 export async function handler(
@@ -31,7 +33,7 @@ export async function handler(
   if (!parsed.ok) {
     return json(400, { message: parsed.message });
   }
-  const seatId = parsed.seatIds[0];
+  const { seatIds } = parsed;
 
   const holdOwner = headerValue(event, "x-user-id") || AUTH_STUB_USER;
   const nowMs = Date.now();
@@ -39,26 +41,25 @@ export async function handler(
   const expiresAt = holdExpiresAt(nowMs);
   const holdId = `h_${randomUUID()}`;
 
+  const transactInput = buildHoldSeatsTransactWriteInput({
+    tableName: seatsTable,
+    eventId,
+    seatIds,
+    holdId,
+    holdOwner,
+    expiresAt,
+    now,
+  });
+
   try {
-    await getDocClient().send(
-      new UpdateCommand(
-        buildHoldSeatUpdateInput({
-          tableName: seatsTable,
-          eventId,
-          seatId,
-          holdId,
-          holdOwner,
-          expiresAt,
-          now,
-        }),
-      ),
-    );
+    await getDocClient().send(new TransactWriteCommand(transactInput));
   } catch (err) {
-    if (isConditionalCheckFailed(err)) {
+    // TransactWrite cancels the whole txn; Step 3 will map this cleanly to 409.
+    if (isTransactionCanceled(err) || isConditionalCheckFailed(err)) {
       return json(409, {
         message: "seat not available",
         eventId,
-        seatId,
+        seatIds,
       });
     }
     throw err;
@@ -66,7 +67,7 @@ export async function handler(
 
   return json(201, {
     holdId,
-    seatIds: [seatId],
+    seatIds,
     expiresAt,
   });
 }
@@ -93,17 +94,22 @@ function parseHoldBody(
   if (!Array.isArray(seatIds)) {
     return { ok: false, message: "seatIds must be an array" };
   }
-  if (seatIds.length !== 1) {
+  if (seatIds.length < 1 || seatIds.length > MAX_HOLD_SEATS) {
     return {
       ok: false,
-      message: "Phase 1 requires seatIds length exactly 1",
+      message: `seatIds length must be between 1 and ${MAX_HOLD_SEATS}`,
     };
   }
-  if (typeof seatIds[0] !== "string" || seatIds[0].length === 0) {
-    return { ok: false, message: "seatIds[0] must be a non-empty string" };
+  for (let i = 0; i < seatIds.length; i++) {
+    if (typeof seatIds[i] !== "string" || seatIds[i].length === 0) {
+      return {
+        ok: false,
+        message: `seatIds[${i}] must be a non-empty string`,
+      };
+    }
   }
 
-  return { ok: true, seatIds: [seatIds[0]] };
+  return { ok: true, seatIds: seatIds as string[] };
 }
 
 function headerValue(
@@ -124,6 +130,12 @@ function isConditionalCheckFailed(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const name = (err as { name?: string }).name;
   return name === "ConditionalCheckFailedException";
+}
+
+function isTransactionCanceled(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = (err as { name?: string }).name;
+  return name === "TransactionCanceledException";
 }
 
 function json(statusCode: number, body: unknown): APIGatewayProxyResult {

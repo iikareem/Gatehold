@@ -195,10 +195,10 @@ Start the next unfinished phase below.
 **Build**
 
 - Idempotency table: key → stored response; duplicate key returns the first result
-- `create-order`: verify hold ownership + not expired + event `ON_SALE` → create `PENDING` order → SQS → `202`
+- `create-order`: verify hold ownership + not expired + event `ON_SALE` → seats `HELD→PAYING` + create `PENDING` order → SQS → `202`
 - Order GSI planning early: `eventId` + `status` (you will need it for refunds)
-- Temporary consumer: log the message or mark order `FAILED` with reason `NO_SAGA_YET` — proves the queue path
-- DLQ on the order queue from day one
+- Order SQS (+ DLQ from day one for when a consumer is added later)
+- **No consumer in this phase** — messages stay on the queue; inspect them in MiniStack
 
 **Learn**
 
@@ -209,9 +209,9 @@ Start the next unfinished phase below.
 
 - Retry with the same `Idempotency-Key` does not create two orders
 - Expired or foreign hold is rejected
-- Message appears on SQS (inspect via MiniStack)
+- Message appears on SQS and remains there (inspect via MiniStack; no worker drains it yet)
 
-**Do not build yet:** payment, tickets, full Step Functions.
+**Do not build yet:** queue consumer, payment, tickets, full Step Functions.
 
 ---
 

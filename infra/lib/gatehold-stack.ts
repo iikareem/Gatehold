@@ -6,6 +6,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as targets from "aws-cdk-lib/aws-scheduler-targets";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 
 export interface GateholdStackProps extends cdk.StackProps {
@@ -13,9 +14,9 @@ export interface GateholdStackProps extends cdk.StackProps {
 }
 
 /**
- * Phase 0–2b stack: Events + Seats, health + hold-seat + hold-sweeper,
- * HTTP API, EventBridge Scheduler → sweeper.
- * Later phases add Cognito, group holds, SQS, Step Functions, refunds.
+ * Phase 0–4 (partial) stack: Events + Seats + Orders + Idempotency,
+ * health + hold-seat + hold-sweeper + create-order (stub), HTTP API,
+ * EventBridge Scheduler → sweeper, order SQS (+ DLQ). Handler logic later.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -40,6 +41,49 @@ export class GateholdStack extends cdk.Stack {
       sortKey: { name: "seatId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: removal,
+    });
+
+    // Phase 4: Orders + Idempotency + order queue (+ create-order below).
+    const ordersTable = new dynamodb.Table(this, "OrdersTable", {
+      tableName: `gatehold-${stage}-orders`,
+      partitionKey: { name: "orderId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: "userId",
+      partitionKey: { name: "userId", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: "eventId-status",
+      partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "status", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    const idempotencyTable = new dynamodb.Table(this, "IdempotencyTable", {
+      tableName: `gatehold-${stage}-idempotency`,
+      partitionKey: { name: "key", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
+      timeToLiveAttribute: "ttl",
+    });
+
+    const orderDlq = new sqs.Queue(this, "OrderDlq", {
+      queueName: `gatehold-${stage}-orders-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+      removalPolicy: removal,
+    });
+    const orderQueue = new sqs.Queue(this, "OrderQueue", {
+      queueName: `gatehold-${stage}-orders`,
+      visibilityTimeout: cdk.Duration.seconds(60),
+      retentionPeriod: cdk.Duration.days(4),
+      removalPolicy: removal,
+      deadLetterQueue: {
+        queue: orderDlq,
+        maxReceiveCount: 5,
+      },
     });
 
     // Lambdas run in Docker under MiniStack; localhost/127.0.0.1 is the
@@ -84,6 +128,25 @@ export class GateholdStack extends cdk.Stack {
       projectRoot,
     });
 
+    const createOrderEnv: Record<string, string> = {
+      ...lambdaEnv,
+      ORDERS_TABLE_NAME: ordersTable.tableName,
+      IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
+      ORDER_QUEUE_URL: orderQueue.queueUrl,
+    };
+
+    const createOrderFn = new NodejsFunction(this, "CreateOrderFn", {
+      functionName: `gatehold-${stage}-create-order`,
+      entry: path.join(__dirname, "../../services/create-order/src/handler.ts"),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: createOrderEnv,
+      bundling,
+      projectRoot,
+    });
+
     // Go custom runtime: zip built by `npm run build:hold-sweeper` (bootstrap).
     const holdSweeperFn = new lambda.Function(this, "HoldSweeperFn", {
       functionName: `gatehold-${stage}-hold-sweeper`,
@@ -102,6 +165,12 @@ export class GateholdStack extends cdk.Stack {
     seatsTable.grantReadData(healthFn);
     seatsTable.grantReadWriteData(holdSeatFn);
     seatsTable.grantReadWriteData(holdSweeperFn);
+
+    eventsTable.grantReadData(createOrderFn);
+    seatsTable.grantReadWriteData(createOrderFn);
+    ordersTable.grantReadWriteData(createOrderFn);
+    idempotencyTable.grantReadWriteData(createOrderFn);
+    orderQueue.grantSendMessages(createOrderFn);
 
     // Timer only (not the Phase 7 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {
@@ -129,6 +198,10 @@ export class GateholdStack extends cdk.Stack {
     const holds = eventById.addResource("holds");
     holds.addMethod("POST", new apigateway.LambdaIntegration(holdSeatFn));
 
+    // POST /orders → create-order Lambda (handler stub until Phase 4 logic)
+    const orders = api.root.addResource("orders");
+    orders.addMethod("POST", new apigateway.LambdaIntegration(createOrderFn));
+
     new cdk.CfnOutput(this, "ApiUrl", {
       value: api.url,
       description: "API Gateway base URL",
@@ -147,6 +220,24 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "HoldSweeperFunctionName", {
       value: holdSweeperFn.functionName,
+    });
+    new cdk.CfnOutput(this, "CreateOrderFunctionName", {
+      value: createOrderFn.functionName,
+    });
+    new cdk.CfnOutput(this, "OrdersTableName", {
+      value: ordersTable.tableName,
+    });
+    new cdk.CfnOutput(this, "IdempotencyTableName", {
+      value: idempotencyTable.tableName,
+    });
+    new cdk.CfnOutput(this, "OrderQueueUrl", {
+      value: orderQueue.queueUrl,
+    });
+    new cdk.CfnOutput(this, "OrderQueueArn", {
+      value: orderQueue.queueArn,
+    });
+    new cdk.CfnOutput(this, "OrderDlqUrl", {
+      value: orderDlq.queueUrl,
     });
   }
 }

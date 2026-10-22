@@ -2,8 +2,12 @@ export type {
   SeatStatus,
   OrderStatus,
   EventStatus,
+  IdempotencyStatus,
   EventItem,
   SeatItem,
+  OrderItem,
+  IdempotencyItem,
+  OrderQueueMessage,
 } from "./types";
 
 export { requireEnv, optionalEnv } from "./env";

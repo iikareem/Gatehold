@@ -30,3 +30,6 @@ coverage.out
 *.log
 .tmp/
 .cache/
+
+# Local Postman workspace sync / agent dumps (keep postman/ JSON for import)
+docs/postman/

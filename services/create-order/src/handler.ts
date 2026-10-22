@@ -1,6 +1,6 @@
 /**
- * Create order Lambda — validates hold, enqueues saga work, returns 202.
- * TODO: idempotency key, order PENDING, SQS enqueue.
+ * Create order Lambda — wired to POST /orders.
+ * Stub until shared builders + accept logic (idempotency, PAYING, PENDING, SQS → 202).
  */
 
 export async function handler(_event: unknown): Promise<{ statusCode: number; body: string }> {

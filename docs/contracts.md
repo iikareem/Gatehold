@@ -39,13 +39,14 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 | `row` | string | e.g. `12` |
 | `version` | number | Optimistic locking (starts at `1`) |
 | `holdId`, `holdOwner`, `expiresAt` | string | Set from Phase 1 |
-| `payUntil`, `orderId` | string | Set from saga phases |
+| `payUntil`, `orderId` | string | Set from Phase 4 accept (`PAYING`); confirm in saga |
 
 ## Seed defaults (local)
 
 - Event: `evt_001` / `ON_SALE`
 - Seats: `A-12-01` … `A-12-50`, all `AVAILABLE`
 - Tables: `gatehold-{stage}-events`, `gatehold-{stage}-seats`
+- Phase 4+: `gatehold-{stage}-orders`, `gatehold-{stage}-idempotency`
 
 ## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
@@ -139,10 +140,150 @@ UpdateItem
 
 Implementation: `go/hold-sweeper` under module `github.com/iikareem/Gatehold/go` (manual `go run ./hold-sweeper` from `go/` in Phase 2; EventBridge Scheduler in Phase 2b).
 
+## Phase 4 — Orders, idempotency, SQS (`POST /orders`)
+
+**Goal:** Accept a purchase for an existing hold: claim idempotency key → verify hold/event → lock seats `HELD→PAYING` + create order `PENDING` (one `TransactWriteItems`) → enqueue SQS → return `202`. No queue consumer in this phase.
+
+**Auth stub:** same as holds — `X-User-Id` header, else `test-user`. Never trust `userId` from the body.
+
+### Request
+
+Headers:
+
+- `Idempotency-Key` — **required**. Missing → `400`.
+- `X-User-Id` — optional stub until Cognito.
+
+Body (`seatIds` required so updates target seat items without a `holdId` GSI; client reuses the list from the hold response):
+
+```json
+{
+  "eventId": "evt_001",
+  "holdId": "h_…",
+  "seatIds": ["A-12-10", "A-12-11"]
+}
+```
+
+- `seatIds` length **1..8** (same cap as holds). Cap / empty / invalid → `400`.
+- `eventId` and `holdId` must be non-empty strings.
+
+### Success — `202 Accepted`
+
+```json
+{
+  "orderId": "ord_…",
+  "status": "PENDING"
+}
+```
+
+Same `Idempotency-Key` retry returns this **stored** response (no second order, no second enqueue after accept is recorded).
+
+### Errors
+
+| Status | When |
+|---|---|
+| `400` | Missing `Idempotency-Key`, missing/invalid body, bad `seatIds` |
+| `409` | Foreign/expired hold, seat not still `HELD` under that `holdId`, event not `ON_SALE`, or idempotency key still `IN_PROGRESS` |
+| `500` | Accept txn succeeded but SQS send failed (key may stay `IN_PROGRESS`; client may retry same key) |
+
+### Orders table
+
+Table name: `gatehold-{stage}-orders`
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `orderId` (PK) | string | e.g. `ord_…` |
+| `userId` | string | Hold owner / `X-User-Id` |
+| `eventId` | string | Event partition |
+| `holdId` | string | Hold being purchased |
+| `seatIds` | string[] | Seats in this order |
+| `status` | string | `PENDING` on create; later `CONFIRMED` \| `FAILED` \| `REFUND_PENDING` \| `REFUNDED` |
+| `idempotencyKey` | string | Same client `Idempotency-Key` |
+| `createdAt` | string | ISO-8601 |
+| `amount` | number | Optional until payment |
+| `executionArn` | string | Optional until saga |
+| `failReason` | string | Optional debugging |
+
+**GSIs**
+
+| GSI | Keys | Why |
+|---|---|---|
+| `userId` | PK `userId` | List orders for a user |
+| `eventId-status` | PK `eventId`, SK `status` | Cancel / refund fan-out |
+
+### Idempotency table
+
+Table name: `gatehold-{stage}-idempotency`
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `key` (PK) | string | Value of `Idempotency-Key` header |
+| `status` | string | `IN_PROGRESS` \| `ACCEPTED` |
+| `responseStatus` | number | Stored HTTP status (e.g. `202`) when `ACCEPTED` |
+| `responseBody` | string | JSON string of stored response body |
+| `orderId` | string | Optional link to the order |
+| `ttl` | number | Epoch seconds; DynamoDB TTL cleanup |
+
+**Status meaning**
+
+- `IN_PROGRESS` — this request owns the key; accept path not finished (or SQS not confirmed yet).
+- `ACCEPTED` — accept API done: order created, SQS sent, response stored. **Not** order `CONFIRMED`.
+
+### Create-order transaction
+
+`payUntil = now + PAY_WINDOW_MS` (shared constant; seats stay protected while the order is `PENDING`).
+
+```
+TransactWriteItems [
+  Put idempotency
+    key = :key, status = IN_PROGRESS, orderId = :o, ttl = …
+    CONDITION attribute_not_exists(key)
+
+  ConditionCheck event
+    eventId = :e
+    CONDITION #status = ON_SALE
+
+  Update (each seat)
+    SET #status = PAYING,
+        orderId = :o,
+        payUntil = :payUntil
+    CONDITION holdId = :h
+          AND holdOwner = :u
+          AND #status = HELD
+          AND expiresAt > :now
+
+  Put order
+    orderId, userId, eventId, holdId, seatIds,
+    status = PENDING, idempotencyKey, createdAt
+]
+```
+
+Any condition failure → whole txn cancels. Duplicate key → Get idempotency item and return stored / in-progress response.
+
+After txn success: `SendMessage` to order SQS, then update idempotency to `ACCEPTED` with stored `202` body.
+
+Shared builders (Phase 4 implementation): `buildCreateOrderTransactWriteInput` in `services/shared` (alongside hold builders).
+
+### Order SQS message (Phase 4)
+
+Queue: order queue (+ DLQ configured; **no consumer** in Phase 4 — messages remain until a later phase).
+
+Payload (JSON body):
+
+```json
+{
+  "orderId": "ord_…",
+  "eventId": "evt_001",
+  "holdId": "h_…",
+  "seatIds": ["A-12-10", "A-12-11"],
+  "userId": "test-user"
+}
+```
+
 ## TODO (later phases)
 
-- Conditional write expressions for confirm / payment release
-- Idempotency key formats (order, payment, refund)
-- SQS message shapes (order enqueue, refund job)
+- Conditional write expressions for confirm / payment release (`PAYING→SOLD`, compensation release)
+- Payment / refund idempotency key formats
+- SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
 - Ledger entry kinds (`AUTH`, `CAPTURE`, `VOID`, `REFUND`)
+- Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

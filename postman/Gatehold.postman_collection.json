@@ -1,121 +1,543 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\nSelect environment Gatehold MiniStack → Desktop Agent → run 1→9 in order.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack \u2192 Desktop Agent.\\n\\nFolders: Health, Holds, Orders. Variants are under Examples.\\nFlow: Hold seats \u2192 Accept order \u2192 Get seat (PAYING).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "1. Health — liveness",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": "{{gatewayBase}}/health"
-      }
-    },
-    {
-      "name": "2. Health — get seat",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId=A-12-01"
-      }
-    },
-    {
-      "name": "3. Hold — single seat (201)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-User-Id", "value": "{{userId}}" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"seatIds\": [\"{{seatId}}\"]\n}"
+      "name": "Health",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayBase}}/health"
+          },
+          "response": [
+            {
+              "name": "200 ok",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/health"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"tables\": {\n    \"events\": \"gatehold-dev-events\",\n    \"seats\": \"gatehold-dev-seats\"\n  }\n}"
+            }
+          ]
         },
-        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
-      }
+        {
+          "name": "Get seat",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
+          },
+          "response": [
+            {
+              "name": "200 AVAILABLE",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"AVAILABLE\",\n    \"section\": \"A\",\n    \"row\": \"12\",\n    \"version\": 1\n  }\n}"
+            },
+            {
+              "name": "200 HELD",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"HELD\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"expiresAt\": \"\u2026\"\n  }\n}"
+            },
+            {
+              "name": "200 PAYING",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"PAYING\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_\u2026\",\n    \"payUntil\": \"\u2026\"\n  }\n}"
+            },
+            {
+              "name": "404 missing seat",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId=Z-99-99"
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": false,\n  \"message\": \"seat not found\"\n}"
+            }
+          ]
+        }
+      ]
     },
     {
-      "name": "4. Hold — conflict (409)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-User-Id", "value": "bob" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"seatIds\": [\"{{seatId}}\"]\n}"
-        },
-        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
-      }
+      "name": "Holds",
+      "item": [
+        {
+          "name": "Hold seats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('holdId', j.holdId);",
+                  "  if (j.seatIds && j.seatIds.length) {",
+                  "    pm.environment.set('seatId', j.seatIds[0]);",
+                  "    pm.environment.set('seatIdsJson', JSON.stringify(j.seatIds));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seatIds\": [\"{{seatId}}\"]\n}"
+            },
+            "url": "{{gatewayBase}}/events/{{eventId}}/holds",
+            "description": "Reserve seats (HELD). Saves holdId + seatIds for Accept order. See Examples for group/conflict/400."
+          },
+          "response": [
+            {
+              "name": "201 single seat",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "{{userId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"seatIds\": [\"A-12-07\"]\n}"
+                },
+                "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"],\n  \"expiresAt\": \"\u2026\"\n}"
+            },
+            {
+              "name": "201 group seats",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "{{userId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"]\n}"
+                },
+                "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"],\n  \"expiresAt\": \"\u2026\"\n}"
+            },
+            {
+              "name": "409 conflict",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "bob"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"seatIds\": [\"A-12-07\"]\n}"
+                },
+                "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"seat not available\",\n  \"eventId\": \"evt_001\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+            },
+            {
+              "name": "409 group overlap",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "bob"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"seatIds\": [\"A-12-31\", \"A-12-32\"]\n}"
+                },
+                "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"seat not available\",\n  \"eventId\": \"evt_001\",\n  \"seatIds\": [\"A-12-31\", \"A-12-32\"]\n}"
+            },
+            {
+              "name": "400 empty seatIds",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"seatIds\": []\n}"
+                },
+                "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"seatIds length must be between 1 and 8\"\n}"
+            },
+            {
+              "name": "400 too many seats",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"seatIds\": [\"A-12-01\",\"A-12-02\",\"A-12-03\",\"A-12-04\",\"A-12-05\",\"A-12-06\",\"A-12-07\",\"A-12-08\",\"A-12-09\"]\n}"
+                },
+                "url": "{{gatewayBase}}/events/{{eventId}}/holds"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"seatIds length must be between 1 and 8\"\n}"
+            }
+          ]
+        }
+      ]
     },
     {
-      "name": "5. Hold — group seats (201)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-User-Id", "value": "{{userId}}" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"]\n}"
-        },
-        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
-      }
-    },
-    {
-      "name": "6. Hold — group overlap (409)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-User-Id", "value": "bob" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"seatIds\": [\"A-12-31\", \"A-12-32\"]\n}"
-        },
-        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
-      }
-    },
-    {
-      "name": "7. Health — confirm held seat",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
-      }
-    },
-    {
-      "name": "8. Hold — empty seatIds (400)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"seatIds\": []\n}"
-        },
-        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
-      }
-    },
-    {
-      "name": "9. Hold — too many seats (400)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"seatIds\": [\"A-12-01\",\"A-12-02\",\"A-12-03\",\"A-12-04\",\"A-12-05\",\"A-12-06\",\"A-12-07\",\"A-12-08\",\"A-12-09\"]\n}"
-        },
-        "url": "{{gatewayBase}}/events/{{eventId}}/holds"
-      }
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Accept order",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('idempotencyKey')) {",
+                  "  pm.environment.set('idempotencyKey', 'idem-' + Date.now());",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('orderId', j.orderId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": {{seatIdsJson}}\n}"
+            },
+            "url": "{{gatewayBase}}/orders",
+            "description": "Buy an existing hold. Run Holds \u2192 Hold seats first (sets holdId + seatIdsJson). Idempotency-Key required. Examples: retry / 400 / 409."
+          },
+          "response": [
+            {
+              "name": "202 accepted",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "{{userId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idempotencyKey}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+                },
+                "url": "{{gatewayBase}}/orders"
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\"\n}"
+            },
+            {
+              "name": "202 same Idempotency-Key",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "{{userId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idempotencyKey}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+                },
+                "url": "{{gatewayBase}}/orders"
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\"\n}"
+            },
+            {
+              "name": "400 missing Idempotency-Key",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "{{userId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+                },
+                "url": "{{gatewayBase}}/orders"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"missing Idempotency-Key header\"\n}"
+            },
+            {
+              "name": "409 foreign or expired hold",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-User-Id",
+                    "value": "bob"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "idem-bob-foreign"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+                },
+                "url": "{{gatewayBase}}/orders"
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"order not acceptable\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

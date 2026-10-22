@@ -116,7 +116,7 @@ Flow: your curl → MiniStack API Gateway → health Lambda → DynamoDB (same e
 
 ### Phase 2 — Hold sweeper (manual)
 
-The sweeper cleans stale `HELD` rows in DynamoDB/UI. Phase 1’s hold condition (`expiresAt < now`) remains the concurrency gate — the sweeper is belt-and-suspenders, not EventBridge yet (Phase 2b).
+The sweeper cleans stale `HELD` rows in DynamoDB/UI. Phase 1’s hold condition (`expiresAt < now`) remains the concurrency gate — the sweeper is belt-and-suspenders; EventBridge Scheduler invokes the sweeper Lambda on a timer (Phase 2b).
 
 ```bash
 # Env (same MiniStack vars as seed)
@@ -244,7 +244,7 @@ npm run destroy:aws
 
 - [x] `go run ./hold-sweeper` clears expired `HELD` → `AVAILABLE` on MiniStack
 - [x] Second sweeper run is idempotent (no error; seat stays `AVAILABLE`)
-- [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda (later)
+- [x] Phase 2b — EventBridge Scheduler → sweeper Lambda
 
 ## Phase 4 checklist
 

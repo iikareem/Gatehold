@@ -125,7 +125,7 @@ Start the next unfinished phase below.
 - Manual sweeper run clears expired holds on MiniStack
 - Sweeper is idempotent
 
-**Status:** Done (manual `go run ./hold-sweeper` against MiniStack). Sweeper keeps table/UI honest; Phase 1 hold condition remains the concurrency gate. Unit tests deferred. Do not start Phase 2b until you want scheduling.
+**Status:** Done (manual `go run ./hold-sweeper` against MiniStack). Sweeper keeps table/UI honest; Phase 1 hold condition remains the concurrency gate. Unit tests deferred. Scheduling is Phase 2b (done).
 
 ---
 
@@ -152,6 +152,8 @@ Start the next unfinished phase below.
 - Scheduler (or forced invoke of the deployed Lambda) releases an expired hold without `go run`
 
 **Note:** Phase 7 EventBridge is still for **domain events** (streams → email/audit). Scheduler here is only the **timer** for the sweeper.
+
+**Status:** Done — CDK packages `hold-sweeper` as a Go Lambda; EventBridge Scheduler invokes it on a 1-minute rate.
 
 ---
 
@@ -512,7 +514,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 0 — Local loop and shared foundations
 - [x] Phase 1 — Single-seat hold
 - [x] Phase 2 — Hold expiry correctness (sweeper logic)
-- [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda
+- [x] Phase 2b — EventBridge Scheduler → sweeper Lambda
 - [x] Phase 3 — Group holds (explicit `seatIds` + `TransactWriteItems`)
 - [x] Phase 4 — Orders, idempotency, SQS
 - [ ] Phase 5 — Mock payment provider

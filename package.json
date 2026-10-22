@@ -15,8 +15,7 @@
     "destroy:local": "cd infra && npx cdklocal destroy --all --force",
     "deploy:aws": "npm run build:hold-sweeper && cd infra && unset AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3 && npx cdk bootstrap --context stage=dev && npx cdk deploy --all --require-approval never --context stage=dev --outputs-file ../.cdk-outputs.json",
     "destroy:aws": "cd infra && unset AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3 && npx cdk destroy --all",
-    "test": "node --require ts-node/register/transpile-only --test services/shared/src/hold.test.ts services/hold-seat/src/handler.test.ts",
-
+    "test": "node --require ts-node/register/transpile-only --test services/shared/src/hold.test.ts services/shared/src/order.test.ts services/hold-seat/src/handler.test.ts services/create-order/src/handler.test.ts",
     "test:failure": "echo \"TODO: run failure-injection scenarios\"",
     "ministack:up": "docker compose up -d",
     "ministack:down": "docker compose down",
@@ -29,6 +28,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.758.0",
+    "@aws-sdk/client-sqs": "^3.1155.0",
     "@aws-sdk/lib-dynamodb": "^3.758.0",
     "aws-cdk-lib": "^2.178.2",
     "constructs": "^10.4.2"

@@ -12,6 +12,7 @@ export type {
 
 export { requireEnv, optionalEnv } from "./env";
 export { createDynamoDBClient, getDocClient } from "./dynamodb";
+export { createSqsClient, getSqsClient } from "./sqs";
 export {
   HOLD_DURATION_MS,
   buildHoldSeatUpdateInput,
@@ -20,6 +21,16 @@ export {
   type HoldSeatUpdateParams,
   type HoldSeatsTransactParams,
 } from "./hold";
+export {
+  PAY_WINDOW_MS,
+  IDEMPOTENCY_TTL_SECONDS,
+  buildLockSeatForPaymentUpdateInput,
+  buildCreateOrderTransactWriteInput,
+  payUntilAt,
+  idempotencyTtlEpoch,
+  type LockSeatForPaymentParams,
+  type CreateOrderTransactParams,
+} from "./order";
 
 /** Zero-pad a seat number so row range queries sort correctly (e.g. 7 → "07"). */
 export function formatSeatId(

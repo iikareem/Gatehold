@@ -190,14 +190,14 @@ This path exercises DynamoDB transaction semantics, per-item cancellation reason
 
 `POST /orders` stays fast. It:
 
-1. Checks the idempotency key
+1. Claims the idempotency key (conditional write)
 2. Verifies the caller owns the hold and it has not expired
 3. Checks the event is still on sale
-4. Creates the order as `PENDING`
+4. Locks seats `HELD → PAYING` and creates the order as `PENDING` (one DynamoDB transaction)
 5. Enqueues a message on SQS
-6. Returns `202 Accepted`
+6. Stores the `202` response on the idempotency record and returns `202 Accepted`
 
-Heavy work runs in a Step Functions saga.
+Body includes `eventId`, `holdId`, and `seatIds` (from the hold response). Heavy work runs later in a Step Functions saga (not Phase 4).
 
 ### Seat state machine
 
@@ -534,7 +534,7 @@ POST /orders
 Idempotency-Key: 7b1c9a52-0c3e-4f5e-9a3d-2f1a8d6e4b10
 Authorization: Bearer <jwt>
 
-{ "holdId": "h_01HXYZ", "eventId": "evt_001" }
+{ "holdId": "h_01HXYZ", "eventId": "evt_001", "seatIds": ["A-12-10", "A-12-11", "A-12-12", "A-12-13"] }
 ```
 
 ```http
@@ -795,7 +795,7 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 2: Hold expiry checks + sweeper logic (manual)
 - [ ] Phase 2b: EventBridge Scheduler → sweeper Lambda
 - [x] Phase 3: Group holds (`seatIds` 1..8 + `TransactWriteItems`; block search deferred)
-- [ ] Phase 4: Orders, idempotency, SQS (+ DLQ)
+- [x] Phase 4: Orders, idempotency, SQS (+ DLQ; no consumer yet)
 - [ ] Phase 5: Mock payment provider (Go)
 - [ ] Phase 6: Step Functions saga, ledger, `PAYING` / compensation
 - [ ] Phase 7: Streams relay, EventBridge, notifications

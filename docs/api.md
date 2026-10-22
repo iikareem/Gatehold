@@ -1,8 +1,8 @@
 # API — local testing cheat sheet
 
-Endpoints implemented so far (Phase 0–3 holds). Use this to hit MiniStack **one call at a time**.
+Endpoints implemented so far (Phase 0–4: holds + orders). Use this to hit MiniStack **one call at a time**.
 
-**Postman:** import both JSON files under [`../postman/`](../postman/) — steps in [`../postman/README.md`](../postman/README.md).
+**Postman:** import both JSON files under [`../postman/`](../postman/) — folders Health / Holds / Orders; variants live under **Examples**. Steps in [`../postman/README.md`](../postman/README.md).
 
 Contracts / shapes: [`contracts.md`](./contracts.md). Ops / deploy: [`runbook.md`](./runbook.md).
 
@@ -196,6 +196,92 @@ Hold length: **5 minutes**. Waiting that long also works; no sweeper required fo
 
 ---
 
+## 8. Order — accept hold (`202`)
+
+Use a **fresh** hold (new seat or after reset). Capture `holdId` / `seatIds` from the hold response.
+
+```http
+POST /orders
+Content-Type: application/json
+Idempotency-Key: <uuid>   # required
+X-User-Id: alice          # must match holdOwner
+```
+
+```bash
+# 1) Hold
+HOLD=$(curl -sS -X POST "$BASE/events/evt_001/holds" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: alice" \
+  -d '{"seatIds":["A-12-40"]}')
+echo "$HOLD" | jq .
+HOLD_ID=$(echo "$HOLD" | jq -r .holdId)
+
+# 2) Accept order
+IDEM="idem-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+ORDER=$(curl -sS -X POST "$BASE/orders" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: alice" \
+  -H "Idempotency-Key: $IDEM" \
+  -d "{\"eventId\":\"evt_001\",\"holdId\":\"$HOLD_ID\",\"seatIds\":[\"A-12-40\"]}")
+echo "$ORDER" | jq .
+```
+
+**Expect `202`:**
+
+```json
+{
+  "orderId": "ord_…",
+  "status": "PENDING"
+}
+```
+
+Seat should be `PAYING`:
+
+```bash
+curl -sS "$BASE/health?eventId=evt_001&seatId=A-12-40" | jq .
+```
+
+Message stays on the order queue (**no consumer** in Phase 4):
+
+```bash
+curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
+```
+
+---
+
+## 9. Order — same Idempotency-Key (no second order)
+
+```bash
+curl -sS -X POST "$BASE/orders" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: alice" \
+  -H "Idempotency-Key: $IDEM" \
+  -d "{\"eventId\":\"evt_001\",\"holdId\":\"$HOLD_ID\",\"seatIds\":[\"A-12-40\"]}" | jq .
+```
+
+**Expect `202`** with the **same** `orderId` as step 8 (stored response). SQS should not gain a duplicate accept from this retry once the key is `ACCEPTED`.
+
+---
+
+## 10. Order — missing key / foreign hold
+
+```bash
+# missing Idempotency-Key → 400
+curl -sS -X POST "$BASE/orders" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: alice" \
+  -d '{"eventId":"evt_001","holdId":"h_x","seatIds":["A-12-41"]}' | jq .
+
+# bob tries alice's hold → 409
+curl -sS -X POST "$BASE/orders" \
+  -H "content-type: application/json" \
+  -H "X-User-Id: bob" \
+  -H "Idempotency-Key: idem-bob-1" \
+  -d "{\"eventId\":\"evt_001\",\"holdId\":\"$HOLD_ID\",\"seatIds\":[\"A-12-40\"]}" | jq .
+```
+
+---
+
 ## Suggested one-by-one order
 
 | # | Call | Passes when |
@@ -208,6 +294,9 @@ Hold length: **5 minutes**. Waiting that long also works; no sweeper required fo
 | 6 | Overlapping group | `409` |
 | 7 | Bad body (empty / >8) | `400` |
 | 8 | Re-check seat via health | `HELD` |
+| 9 | `POST /orders` (alice + Idempotency-Key) | `202`, seat `PAYING` |
+| 10 | Same `Idempotency-Key` again | same `orderId` |
+| 11 | Inspect SQS (`/_ministack/sqs/messages`) | order message present |
 
 ---
 
@@ -228,5 +317,5 @@ npm run seed
 Do not expect these to work:
 
 - `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
-- `POST /orders`, payment, saga — later phases
+- Order queue **consumer** / saga / payment — later phases (messages stay on SQS)
 - Cognito JWT — Phase 8 (`X-User-Id` stub only)

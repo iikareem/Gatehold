@@ -514,7 +514,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 2 — Hold expiry correctness (sweeper logic)
 - [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda
 - [x] Phase 3 — Group holds (explicit `seatIds` + `TransactWriteItems`)
-- [ ] Phase 4 — Orders, idempotency, SQS
+- [x] Phase 4 — Orders, idempotency, SQS
 - [ ] Phase 5 — Mock payment provider
 - [ ] Phase 6 — Purchase saga
 - [ ] Phase 7 — Streams / EventBridge / notifications

@@ -69,7 +69,7 @@ Compose also starts **StackPort** on port `8080`. It is a browser UI only — **
 ```bash
 npm run ministack:ui
 # open http://localhost:8080
-# DynamoDB → gatehold-dev-events / gatehold-dev-seats (after deploy + seed)
+# DynamoDB → gatehold-dev-events / seats / orders / idempotency (after deploy + seed)
 ```
 
 ### Load local env
@@ -81,13 +81,15 @@ set -a && source .env.example && set +a
 This sets MiniStack endpoints, fake credentials, region, stage, and table names.  
 Prefer this over hand-exporting; values stay in sync with `.env.example`.
 
-### Deploy Phase 0 infra to MiniStack
+### Deploy infra to MiniStack (through Phase 4)
 
 ```bash
 set -a && source .env.example && set +a
 npm run ministack:up
 npm run deploy:local    # cdklocal bootstrap + deploy → writes .cdk-outputs.json
 ```
+
+Deploys Events, Seats, **Orders**, **Idempotency**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, and `POST /orders`. No order-queue consumer yet.
 
 ### Seed event + seats
 
@@ -99,7 +101,7 @@ npm run get-seat
 
 ### Smoke-test APIs (local)
 
-Copy-paste curls for every live endpoint (health + hold): [`api.md`](./api.md).
+Copy-paste curls for every live endpoint (health + hold + orders): [`api.md`](./api.md).
 
 Stack outputs print an `execute-api` URL. Against MiniStack, call via the emulator edge port (API id = subdomain of `ApiUrl`):
 
@@ -170,6 +172,20 @@ curl http://localhost:4566/_ministack/sqs/messages
 curl http://localhost:4566/_ministack/ses/messages
 ```
 
+### Phase 4 — Orders + SQS (no consumer)
+
+After deploy + seed, follow hold → order → idempotent retry in [`api.md`](./api.md) (§8–10).
+
+```bash
+# Messages remain on the order queue until a later-phase consumer exists
+curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
+
+# Stack outputs also include OrderQueueUrl / OrdersTableName / IdempotencyTableName
+node -e "console.log(require('./.cdk-outputs.json')['Gatehold-dev'])"
+```
+
+StackPort: check `gatehold-dev-orders`, `gatehold-dev-idempotency`, and seats in `PAYING` after a successful accept.
+
 ---
 
 ## Real AWS (later)
@@ -229,6 +245,13 @@ npm run destroy:aws
 - [x] `go run ./hold-sweeper` clears expired `HELD` → `AVAILABLE` on MiniStack
 - [x] Second sweeper run is idempotent (no error; seat stays `AVAILABLE`)
 - [ ] Phase 2b — EventBridge Scheduler → sweeper Lambda (later)
+
+## Phase 4 checklist
+
+- [x] Orders + Idempotency tables, order SQS + DLQ, `POST /orders` (create-order)
+- [x] Same `Idempotency-Key` returns stored `202` (unit-tested; verify on MiniStack via [`api.md`](./api.md))
+- [x] Expired / foreign hold → `409`; missing key → `400`
+- [x] No queue consumer — inspect messages with `/_ministack/sqs/messages`
 
 ## TODO (later)
 

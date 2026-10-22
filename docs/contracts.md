@@ -261,7 +261,7 @@ Any condition failure → whole txn cancels. Duplicate key → Get idempotency i
 
 After txn success: `SendMessage` to order SQS, then update idempotency to `ACCEPTED` with stored `202` body.
 
-Shared builders (Phase 4 implementation): `buildCreateOrderTransactWriteInput` in `services/shared` (alongside hold builders).
+Shared builders: `buildLockSeatForPaymentUpdateInput`, `buildCreateOrderTransactWriteInput`, `payUntilAt`, `idempotencyTtlEpoch` in `services/shared/src/order.ts` (`PAY_WINDOW_MS` = 15 minutes).
 
 ### Order SQS message (Phase 4)
 

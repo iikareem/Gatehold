@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Mock payment. Variants are under Examples.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING).\\nMock payment: start `go run ./mock-payment` from go/, then Authorize → Capture or Void; after Capture use Refund; Status accepts any operation idempotency key.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Mock payment. Variants are under Examples.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING).\\nMock payment: `cd go && go run ./mock-payment` then Health → Authorize → Capture|Void (→ Refund after Capture) → Status. Chaos: set chaosForce and use Authorize (chaos).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -594,6 +594,7 @@
                   "  const j = pm.response.json();",
                   "  pm.environment.set('paymentAuthId', j.authorizationId);",
                   "  if (j.orderId) { pm.environment.set('paymentOrderId', j.orderId); }",
+                  "  pm.environment.set('paymentStatusKey', 'pay:auth:' + (j.orderId || pm.environment.get('paymentOrderId')));",
                   "}"
                 ]
               }
@@ -612,7 +613,7 @@
               "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
             },
             "url": "{{paymentBase}}/v1/payments/authorize",
-            "description": "Reserve funds (does not capture). Saves paymentAuthId. Then run Capture or Void. Keys: pay:auth:{orderId}."
+            "description": "Reserve funds (does not capture). Saves paymentAuthId + paymentStatusKey. Then Capture or Void. For chaos, use Authorize (chaos) or Examples with X-Chaos-Force. Content-Type application/json required."
           },
           "response": [
             {
@@ -722,6 +723,244 @@
                 }
               ],
               "body": "{\n  \"error\": \"conflict: idempotency key reused with different body\",\n  \"code\": \"CONFLICT\"\n}"
+            },
+            {
+              "name": "429 chaos before accept",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Chaos-Force",
+                    "value": "429"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"chaos rate limit\",\n  \"code\": \"RATE_LIMITED\"\n}"
+            },
+            {
+              "name": "timeout chaos then use Status",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Chaos-Force",
+                    "value": "timeout"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "(empty body — outcome stored; GET Status with pay:auth:{{paymentOrderId}})"
+            },
+            {
+              "name": "400 missing Content-Type",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Content-Type application/json required\",\n  \"code\": \"BAD_REQUEST\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Authorize (chaos)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('paymentOrderId')) {",
+                  "  pm.environment.set('paymentOrderId', 'ord_' + Date.now());",
+                  "}",
+                  "const force = pm.environment.get('chaosForce');",
+                  "if (!force) {",
+                  "  console.warn('Set chaosForce env to 429, 500, 502, timeout, or latency');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  try {",
+                  "    const j = pm.response.json();",
+                  "    pm.environment.set('paymentAuthId', j.authorizationId);",
+                  "    if (j.orderId) { pm.environment.set('paymentOrderId', j.orderId); }",
+                  "    pm.environment.set('paymentStatusKey', 'pay:auth:' + j.orderId);",
+                  "  } catch (e) {}",
+                  "}",
+                  "// timeout chaos: empty body but store may have accepted — run Status next",
+                  "if (pm.environment.get('chaosForce') === 'timeout') {",
+                  "  pm.environment.set('paymentStatusKey', 'pay:auth:' + pm.environment.get('paymentOrderId'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Chaos-Force",
+                "value": "{{chaosForce}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{paymentBase}}/v1/payments/authorize",
+            "description": "Same as Authorize but sends X-Chaos-Force from env chaosForce (429 | 500 | 502 | timeout | latency). For timeout: body may be empty; run Status with paymentStatusKey. Set CHAOS_TIMEOUT_MS=1 on the server for a fast timeout smoke."
+          },
+          "response": [
+            {
+              "name": "429 RATE_LIMITED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Chaos-Force",
+                    "value": "429"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"chaos rate limit\",\n  \"code\": \"RATE_LIMITED\"\n}"
+            },
+            {
+              "name": "500 injected",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Chaos-Force",
+                    "value": "500"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Internal Server Error",
+              "code": 500,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"injected 500\",\n  \"code\": \"CHAOS_ERROR\"\n}"
+            },
+            {
+              "name": "timeout empty body — use Status",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Chaos-Force",
+                    "value": "timeout"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "(empty — then GET Status ?idempotencyKey=pay:auth:{{paymentOrderId}})"
             }
           ]
         },
@@ -740,7 +979,7 @@
               "raw": "{\n  \"idempotencyKey\": \"pay:capture:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
             },
             "url": "{{paymentBase}}/v1/payments/capture",
-            "description": "Capture a prior authorization. Run Authorize first (sets paymentAuthId). Happy path: Authorize → Capture."
+            "description": "Capture a prior authorization. Run Authorize first. Sets paymentStatusKey to pay:capture:…. Happy path: Authorize → Capture."
           },
           "response": [
             {
@@ -823,6 +1062,20 @@
                 }
               ],
               "body": "{\n  \"error\": \"invalid transition: cannot move from VOIDED to CAPTURED\",\n  \"code\": \"INVALID_TRANSITION\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('paymentStatusKey', 'pay:capture:' + (j.orderId || pm.environment.get('paymentOrderId')));",
+                  "}"
+                ]
+              }
             }
           ]
         },
@@ -925,6 +1178,20 @@
               ],
               "body": "{\n  \"error\": \"invalid transition: cannot move from CAPTURED to VOIDED\",\n  \"code\": \"INVALID_TRANSITION\"\n}"
             }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('paymentStatusKey', 'pay:void:' + (j.orderId || pm.environment.get('paymentOrderId')));",
+                  "}"
+                ]
+              }
+            }
           ]
         },
         {
@@ -1026,6 +1293,20 @@
               ],
               "body": "{\n  \"error\": \"not found: unknown authorizationId\",\n  \"code\": \"NOT_FOUND\"\n}"
             }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('paymentStatusKey', 'pay:refund:' + (j.orderId || pm.environment.get('paymentOrderId')));",
+                  "}"
+                ]
+              }
+            }
           ]
         },
         {
@@ -1034,7 +1315,7 @@
             "method": "GET",
             "header": [],
             "url": "{{paymentBase}}/v1/payments/status?idempotencyKey={{paymentStatusKey}}",
-            "description": "Look up outcome by any operation idempotency key (pay:auth:…, pay:capture:…, pay:void:…, pay:refund:…). Set paymentStatusKey to the key of the call you are unsure about."
+            "description": "Look up outcome by any operation idempotency key. Authorize/Capture/Void/Refund scripts set paymentStatusKey. After X-Chaos-Force: timeout on Authorize, call Status with pay:auth:{orderId}."
           },
           "response": [
             {

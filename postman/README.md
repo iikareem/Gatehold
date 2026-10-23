@@ -15,9 +15,9 @@
 | **Health** | Liveness, Get seat | Smoke / inspect seat status |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` |
-| **Mock payment** | Authorize, Capture, Void | Local `go/mock-payment` on `paymentBase` |
+| **Mock payment** | Authorize → Capture/Void/Refund + Status | Local `go/mock-payment` on `paymentBase` |
 
-Variants (409, 400, group, idempotent retry) are under **Examples** on those requests — not separate top-level calls.
+Variants (409, 400, chaos, idempotent retry) are under **Examples** on those requests — not separate top-level calls (except **Authorize (chaos)**).
 
 ### Happy path (API Gateway)
 
@@ -30,10 +30,19 @@ Variants (409, 400, group, idempotent retry) are under **Examples** on those req
 Start the mock first (`cd go && go run ./mock-payment`). Uses `paymentBase` (default `http://127.0.0.1:8090`), not `gatewayBase`.
 
 1. **Mock payment → Health** (`ok: true`)  
-2. **Mock payment → Authorize** (saves `paymentAuthId`; mints `paymentOrderId` if empty)  
+2. **Mock payment → Authorize** (saves `paymentAuthId` + `paymentStatusKey`)  
 3. Either **Capture** (`CAPTURED`) or **Void** (`VOIDED`)  
 4. After Capture: **Refund** (`REFUNDED`)  
-5. **Status** with `paymentStatusKey` set to any op key (`pay:auth:…`, `pay:capture:…`, …)
+5. **Status** (uses `paymentStatusKey` — any op key: `pay:auth:…`, `pay:capture:…`, …)
+
+### Chaos (unknown outcomes)
+
+1. Set env `chaosForce` to `429`, `500`, `502`, `timeout`, or `latency`  
+2. Run **Authorize (chaos)** (sends `X-Chaos-Force`)  
+3. For `timeout`: response body may be empty; run **Status** with `paymentStatusKey` (`pay:auth:{orderId}`)  
+4. For fast local timeout: start mock with `CHAOS_TIMEOUT_MS=1`
+
+Also see Examples on **Authorize** for `429` / timeout / missing Content-Type.
 
 ## After redeploy
 

@@ -31,7 +31,9 @@ Start the mock first (`cd go && go run ./mock-payment`). Uses `paymentBase` (def
 
 1. **Mock payment → Health** (`ok: true`)  
 2. **Mock payment → Authorize** (saves `paymentAuthId`; mints `paymentOrderId` if empty)  
-3. Either **Capture** (`CAPTURED`) or **Void** (`VOIDED`)
+3. Either **Capture** (`CAPTURED`) or **Void** (`VOIDED`)  
+4. After Capture: **Refund** (`REFUNDED`)  
+5. **Status** with `paymentStatusKey` set to any op key (`pay:auth:…`, `pay:capture:…`, …)
 
 ## After redeploy
 

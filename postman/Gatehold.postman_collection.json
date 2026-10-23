@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Mock payment. Variants are under Examples.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING).\\nMock payment: start `go run ./mock-payment` from go/, then Authorize → Capture or Void.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Mock payment. Variants are under Examples.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING).\\nMock payment: start `go run ./mock-payment` from go/, then Authorize → Capture or Void; after Capture use Refund; Status accepts any operation idempotency key.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -924,6 +924,190 @@
                 }
               ],
               "body": "{\n  \"error\": \"invalid transition: cannot move from CAPTURED to VOIDED\",\n  \"code\": \"INVALID_TRANSITION\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"pay:refund:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{paymentBase}}/v1/payments/refund",
+            "description": "Return captured funds. Run Authorize → Capture first. Requires CAPTURED."
+          },
+          "response": [
+            {
+              "name": "200 REFUNDED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/refund",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:refund:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:refund:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"REFUNDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "409 not captured yet",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/refund",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:refund:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"invalid transition: cannot move from AUTHORIZED to REFUNDED\",\n  \"code\": \"INVALID_TRANSITION\"\n}"
+            },
+            {
+              "name": "404 unknown authorizationId",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/refund",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:refund:ord_missing\",\n  \"orderId\": \"ord_missing\",\n  \"authorizationId\": \"auth_missing\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"not found: unknown authorizationId\",\n  \"code\": \"NOT_FOUND\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentBase}}/v1/payments/status?idempotencyKey={{paymentStatusKey}}",
+            "description": "Look up outcome by any operation idempotency key (pay:auth:…, pay:capture:…, pay:void:…, pay:refund:…). Set paymentStatusKey to the key of the call you are unsure about."
+          },
+          "response": [
+            {
+              "name": "200 by auth key",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:auth:ord_…"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "200 by capture key after refund",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:capture:ord_…"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:capture:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"REFUNDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "404 unknown key",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:auth:missing"
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"not found: unknown idempotency key\",\n  \"code\": \"NOT_FOUND\"\n}"
+            },
+            {
+              "name": "400 missing key",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{paymentBase}}/v1/payments/status"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"bad request: idempotencyKey required\",\n  \"code\": \"BAD_REQUEST\"\n}"
             }
           ]
         }

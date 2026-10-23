@@ -15,14 +15,23 @@
 | **Health** | Liveness, Get seat | Smoke / inspect seat status |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` |
+| **Mock payment** | Authorize, Capture, Void | Local `go/mock-payment` on `paymentBase` |
 
 Variants (409, 400, group, idempotent retry) are under **Examples** on those requests — not separate top-level calls.
 
-### Happy path
+### Happy path (API Gateway)
 
 1. **Holds → Hold seats** (saves `holdId` + `seatIdsJson`)  
 2. **Orders → Accept order** (uses that hold; sets `orderId`)  
 3. **Health → Get seat** (expect `PAYING`)
+
+### Happy path (mock payment)
+
+Start the mock first (`cd go && go run ./mock-payment`). Uses `paymentBase` (default `http://127.0.0.1:8090`), not `gatewayBase`.
+
+1. **Mock payment → Health** (`ok: true`)  
+2. **Mock payment → Authorize** (saves `paymentAuthId`; mints `paymentOrderId` if empty)  
+3. Either **Capture** (`CAPTURED`) or **Void** (`VOIDED`)
 
 ## After redeploy
 

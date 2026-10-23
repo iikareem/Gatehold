@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack \u2192 Desktop Agent.\\n\\nFolders: Health, Holds, Orders. Variants are under Examples.\\nFlow: Hold seats \u2192 Accept order \u2192 Get seat (PAYING).",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Mock payment. Variants are under Examples.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING).\\nMock payment: start `go run ./mock-payment` from go/, then Authorize → Capture or Void.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -78,7 +78,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"HELD\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"expiresAt\": \"\u2026\"\n  }\n}"
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"HELD\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"expiresAt\": \"…\"\n  }\n}"
             },
             {
               "name": "200 PAYING",
@@ -96,7 +96,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"PAYING\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_\u2026\",\n    \"payUntil\": \"\u2026\"\n  }\n}"
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"PAYING\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_…\",\n    \"payUntil\": \"…\"\n  }\n}"
             },
             {
               "name": "404 missing seat",
@@ -192,7 +192,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"],\n  \"expiresAt\": \"\u2026\"\n}"
+              "body": "{\n  \"holdId\": \"h_…\",\n  \"seatIds\": [\"A-12-07\"],\n  \"expiresAt\": \"…\"\n}"
             },
             {
               "name": "201 group seats",
@@ -223,7 +223,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"],\n  \"expiresAt\": \"\u2026\"\n}"
+              "body": "{\n  \"holdId\": \"h_…\",\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"],\n  \"expiresAt\": \"…\"\n}"
             },
             {
               "name": "409 conflict",
@@ -396,7 +396,7 @@
               "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": {{seatIdsJson}}\n}"
             },
             "url": "{{gatewayBase}}/orders",
-            "description": "Buy an existing hold. Run Holds \u2192 Hold seats first (sets holdId + seatIdsJson). Idempotency-Key required. Examples: retry / 400 / 409."
+            "description": "Buy an existing hold. Run Holds → Hold seats first (sets holdId + seatIdsJson). Idempotency-Key required. Examples: retry / 400 / 409."
           },
           "response": [
             {
@@ -432,7 +432,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\"\n}"
+              "body": "{\n  \"orderId\": \"ord_…\",\n  \"status\": \"PENDING\"\n}"
             },
             {
               "name": "202 same Idempotency-Key",
@@ -467,7 +467,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\"\n}"
+              "body": "{\n  \"orderId\": \"ord_…\",\n  \"status\": \"PENDING\"\n}"
             },
             {
               "name": "400 missing Idempotency-Key",
@@ -533,7 +533,397 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"message\": \"order not acceptable\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+              "body": "{\n  \"message\": \"order not acceptable\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_…\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mock payment",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paymentBase}}/health",
+            "description": "Smoke the local go/mock-payment process (go run ./mock-payment from go/). Not the API Gateway health."
+          },
+          "response": [
+            {
+              "name": "200 ok",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{paymentBase}}/health"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": true\n}"
+            }
+          ]
+        },
+        {
+          "name": "Authorize",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('paymentOrderId')) {",
+                  "  pm.environment.set('paymentOrderId', 'ord_' + Date.now());",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('paymentAuthId', j.authorizationId);",
+                  "  if (j.orderId) { pm.environment.set('paymentOrderId', j.orderId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{paymentBase}}/v1/payments/authorize",
+            "description": "Reserve funds (does not capture). Saves paymentAuthId. Then run Capture or Void. Keys: pay:auth:{orderId}."
+          },
+          "response": [
+            {
+              "name": "200 AUTHORIZED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "200 idempotent retry",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "400 bad request",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:ord_bad\",\n  \"orderId\": \"ord_bad\",\n  \"amount\": 0,\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"bad request: amount must be positive\",\n  \"code\": \"BAD_REQUEST\"\n}"
+            },
+            {
+              "name": "409 conflict different body",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/authorize",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"amount\": 9999,\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"conflict: idempotency key reused with different body\",\n  \"code\": \"CONFLICT\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Capture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"pay:capture:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{paymentBase}}/v1/payments/capture",
+            "description": "Capture a prior authorization. Run Authorize first (sets paymentAuthId). Happy path: Authorize → Capture."
+          },
+          "response": [
+            {
+              "name": "200 CAPTURED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/capture",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:capture:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:capture:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"CAPTURED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "404 unknown authorizationId",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/capture",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:capture:ord_missing\",\n  \"orderId\": \"ord_missing\",\n  \"authorizationId\": \"auth_missing\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"not found: unknown authorizationId\",\n  \"code\": \"NOT_FOUND\"\n}"
+            },
+            {
+              "name": "409 invalid transition",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/capture",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:capture:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"invalid transition: cannot move from VOIDED to CAPTURED\",\n  \"code\": \"INVALID_TRANSITION\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Void",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"pay:void:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+            },
+            "url": "{{paymentBase}}/v1/payments/void",
+            "description": "Cancel an authorization (no money moved). Run Authorize first. Alternative to Capture when seats cannot be confirmed."
+          },
+          "response": [
+            {
+              "name": "200 VOIDED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/void",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:void:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"idempotencyKey\": \"pay:void:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"VOIDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+            },
+            {
+              "name": "404 unknown authorizationId",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/void",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:void:ord_missing\",\n  \"orderId\": \"ord_missing\",\n  \"authorizationId\": \"auth_missing\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"not found: unknown authorizationId\",\n  \"code\": \"NOT_FOUND\"\n}"
+            },
+            {
+              "name": "409 already captured",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{paymentBase}}/v1/payments/void",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"idempotencyKey\": \"pay:void:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"invalid transition: cannot move from CAPTURED to VOIDED\",\n  \"code\": \"INVALID_TRANSITION\"\n}"
             }
           ]
         }

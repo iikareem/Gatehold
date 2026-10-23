@@ -279,11 +279,168 @@ Payload (JSON body):
 }
 ```
 
+## Phase 5 — Mock payment provider (`go/mock-payment`)
+
+**Goal:** Controllable HTTP payment API before the Phase 6 saga depends on it. Standalone process (not API Gateway). In-memory only; no DynamoDB ledger writes in this phase.
+
+**Local base URL:** `http://127.0.0.1:8090` (override with `PORT` env).
+
+**Implementation:** `go run ./mock-payment` from `go/`.
+
+### Idempotency key formats
+
+The saga (Phase 6) will send these keys. The mock treats the key as opaque but clients must use this shape:
+
+| Operation | Key format |
+|---|---|
+| Authorize | `pay:auth:{orderId}` |
+| Capture | `pay:capture:{orderId}` |
+| Void | `pay:void:{orderId}` |
+| Refund | `pay:refund:{orderId}` |
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Smoke test |
+| `POST` | `/v1/payments/authorize` | Reserve funds (does not capture) |
+| `POST` | `/v1/payments/capture` | Capture a prior authorization |
+| `POST` | `/v1/payments/void` | Cancel an authorization (no money moved) |
+| `POST` | `/v1/payments/refund` | Return captured funds |
+| `GET` | `/v1/payments/status?idempotencyKey=` | Resolve unknown / timeout outcomes |
+
+### Provider payment status
+
+`AUTHORIZED` → `CAPTURED` \| `VOIDED`
+
+`CAPTURED` → `REFUNDED`
+
+Also: `FAILED` (terminal failure for that operation attempt).
+
+Illegal transitions (e.g. capture after void, refund without capture) → `409`.
+
+### Authorize — `POST /v1/payments/authorize`
+
+**Request:**
+
+```json
+{
+  "idempotencyKey": "pay:auth:ord_…",
+  "orderId": "ord_…",
+  "amount": 5000,
+  "currency": "USD"
+}
+```
+
+- `amount` is integer cents.
+- `currency` is `USD` for local runs.
+
+**Success — `200`:**
+
+```json
+{
+  "idempotencyKey": "pay:auth:ord_…",
+  "orderId": "ord_…",
+  "authorizationId": "auth_…",
+  "paymentId": "pay_…",
+  "status": "AUTHORIZED",
+  "amount": 5000,
+  "currency": "USD"
+}
+```
+
+### Capture — `POST /v1/payments/capture`
+
+**Request:**
+
+```json
+{
+  "idempotencyKey": "pay:capture:ord_…",
+  "orderId": "ord_…",
+  "authorizationId": "auth_…",
+  "amount": 5000,
+  "currency": "USD"
+}
+```
+
+Requires an existing authorization in `AUTHORIZED`. Success → `status: CAPTURED` (same response shape; `authorizationId` echoed).
+
+### Void — `POST /v1/payments/void`
+
+**Request:** same fields as capture (`idempotencyKey` = `pay:void:{orderId}`).
+
+Requires `AUTHORIZED`. Success → `status: VOIDED`. Prefer void over refund when seats cannot be confirmed (no money moved).
+
+### Refund — `POST /v1/payments/refund`
+
+**Request:** same fields as capture (`idempotencyKey` = `pay:refund:{orderId}`).
+
+Requires `CAPTURED`. Success → `status: REFUNDED`.
+
+### Status — `GET /v1/payments/status?idempotencyKey=…`
+
+Returns the **stored** outcome for that key (authorize, capture, void, or refund). Used after client timeout / unknown result.
+
+- Known key → `200` with the same body shape as the original success (or `FAILED` if that op failed).
+- Unknown key → `404`.
+
+### Idempotency rule
+
+- Same `idempotencyKey` + same operation + same body → return the **stored** success (`200`); never a second charge / second auth.
+- Same key with a **different** body → `409`.
+- Each operation (auth / capture / void / refund) has its own key.
+
+### Errors
+
+| Status | When |
+|---|---|
+| `400` | Missing/invalid JSON or required fields |
+| `404` | Status query for unknown key; capture/void/refund for unknown `authorizationId` |
+| `409` | Idempotency key reuse with different body; illegal status transition |
+| `429` | Chaos rate limit (see below) |
+| `500` / `502` | Chaos hard errors |
+
+Error body:
+
+```json
+{ "error": "human-readable message", "code": "MACHINE_CODE" }
+```
+
+### Ledger kinds (Phase 6 writes; document now)
+
+The DynamoDB ledger (not built in Phase 5) will use append-only kinds mapped from provider outcomes:
+
+| Ledger kind | After provider status |
+|---|---|
+| `AUTH` | `AUTHORIZED` |
+| `CAPTURE` | `CAPTURED` |
+| `VOID` | `VOIDED` |
+| `REFUND` | `REFUNDED` |
+
+Phase 6 conditional-writes these with the same idempotency keys so duplicates are rejected. The mock only returns statuses; it does not write the ledger.
+
+### Chaos knobs
+
+Env defaults (process-wide) plus optional per-request override header `X-Chaos-Force` (`429`, `500`, `timeout`, `latency`).
+
+| Knob | Env example | Behavior |
+|---|---|---|
+| Latency | `CHAOS_LATENCY_MS=200` | Sleep before responding |
+| Timeout feel | `CHAOS_TIMEOUT_RATE=0.1` | Delay / close so the client times out; **outcome may already be stored** — client must `GET /status` |
+| Rate limit | `CHAOS_429_RATE=0.2` | `429` + `Retry-After`; no store mutation |
+| Hard errors | `CHAOS_ERROR_RATE=0.1` | `500` / `502` before accept — no store write |
+| Duplicate success | (store idempotency) | Retry same key returns the same body |
+
+**Timeout vs status:** for “timeout after success”, store the outcome **before** applying the delay/drop so `GET /status` is deterministic for that key. For “fail before accept” (`429` / hard error), do not write the store.
+
+### Out of scope (later phases)
+
+- Step Functions saga client, DynamoDB ledger table, Secrets Manager URL (Phases 6 / 8)
+- Curls for live smoke → [`api.md`](./api.md) once the server exists
+
 ## TODO (later phases)
 
 - Conditional write expressions for confirm / payment release (`PAYING→SOLD`, compensation release)
-- Payment / refund idempotency key formats
 - SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
-- Ledger entry kinds (`AUTH`, `CAPTURE`, `VOID`, `REFUND`)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

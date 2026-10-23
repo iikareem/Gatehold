@@ -29,7 +29,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/payments/status", s.handleStatus)
 }
 
-// ServeHTTP implements http.Handler.
+// ServeHTTP implements http.Handler (with per-request logging).
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.mux.ServeHTTP(w, r)
+	withRequestLog(s.mux).ServeHTTP(w, r)
 }

@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 )
+
+const maxBodyBytes = 1 << 20 // 1 MiB
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if s.chaos.Before(w, r) {
@@ -31,6 +36,7 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
+	setLogKey(w, in.IdempotencyKey)
 
 	out, err := s.store.Authorize(r.Context(), in)
 	if err != nil {
@@ -61,6 +67,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := r.URL.Query().Get("idempotencyKey")
+	setLogKey(w, key)
 	out, err := s.store.GetByKey(r.Context(), key)
 	if err != nil {
 		writeStoreError(w, err)
@@ -86,6 +93,7 @@ func (s *Server) handleFollowUp(
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
+	setLogKey(w, in.IdempotencyKey)
 
 	out, err := fn(r.Context(), in)
 	if err != nil {
@@ -99,11 +107,36 @@ func (s *Server) handleFollowUp(
 }
 
 func decodeJSON(r *http.Request, dst any) error {
+	if err := requireJSONContentType(r); err != nil {
+		return err
+	}
 	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(nil, r.Body, maxBodyBytes)
+
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return fmt.Errorf("body too large (max %d bytes)", maxBodyBytes)
+		}
+		if errors.Is(err, io.EOF) {
+			return fmt.Errorf("empty body")
+		}
 		return err
+	}
+	return nil
+}
+
+func requireJSONContentType(r *http.Request) error {
+	ct := r.Header.Get("Content-Type")
+	if ct == "" {
+		return fmt.Errorf("Content-Type application/json required")
+	}
+	// Loose match: application/json or application/json; charset=utf-8
+	media := strings.TrimSpace(strings.Split(ct, ";")[0])
+	if !strings.EqualFold(media, "application/json") {
+		return fmt.Errorf("Content-Type must be application/json")
 	}
 	return nil
 }

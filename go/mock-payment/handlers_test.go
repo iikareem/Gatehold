@@ -59,6 +59,48 @@ func TestHTTPAuthorizeThenVoid(t *testing.T) {
 	}
 }
 
+func TestHTTPAuthorizeCaptureRefundAndStatus(t *testing.T) {
+	srv := NewServer(Config{Port: "8090"}, NewStore())
+
+	authResp := postJSON(t, srv, "/v1/payments/authorize", map[string]any{
+		"idempotencyKey": "pay:auth:ord_http_3",
+		"orderId":        "ord_http_3",
+		"amount":         2500,
+		"currency":       "USD",
+	}, http.StatusOK)
+
+	statusAuth := getStatus(t, srv, "pay:auth:ord_http_3", http.StatusOK)
+	if statusAuth.Status != StatusAuthorized || statusAuth.AuthorizationID != authResp.AuthorizationID {
+		t.Fatalf("status after auth: %+v", statusAuth)
+	}
+
+	postJSON(t, srv, "/v1/payments/capture", map[string]any{
+		"idempotencyKey":  "pay:capture:ord_http_3",
+		"orderId":         "ord_http_3",
+		"authorizationId": authResp.AuthorizationID,
+		"amount":          2500,
+		"currency":        "USD",
+	}, http.StatusOK)
+
+	refundResp := postJSON(t, srv, "/v1/payments/refund", map[string]any{
+		"idempotencyKey":  "pay:refund:ord_http_3",
+		"orderId":         "ord_http_3",
+		"authorizationId": authResp.AuthorizationID,
+		"amount":          2500,
+		"currency":        "USD",
+	}, http.StatusOK)
+	if refundResp.Status != StatusRefunded {
+		t.Fatalf("refund: %+v", refundResp)
+	}
+
+	statusCapture := getStatus(t, srv, "pay:capture:ord_http_3", http.StatusOK)
+	if statusCapture.Status != StatusRefunded {
+		t.Fatalf("status after refund via capture key: %+v", statusCapture)
+	}
+
+	getStatus(t, srv, "pay:auth:missing", http.StatusNotFound)
+}
+
 func postJSON(t *testing.T, h http.Handler, path string, body map[string]any, wantStatus int) PaymentResponse {
 	t.Helper()
 	b, err := json.Marshal(body)
@@ -71,6 +113,24 @@ func postJSON(t *testing.T, h http.Handler, path string, body map[string]any, wa
 	h.ServeHTTP(rec, req)
 	if rec.Code != wantStatus {
 		t.Fatalf("%s: status %d body %s", path, rec.Code, rec.Body.String())
+	}
+	var out PaymentResponse
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return out
+}
+
+func getStatus(t *testing.T, h http.Handler, idempotencyKey string, wantStatus int) PaymentResponse {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/v1/payments/status?idempotencyKey="+idempotencyKey, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != wantStatus {
+		t.Fatalf("status %q: got %d body %s", idempotencyKey, rec.Code, rec.Body.String())
+	}
+	if wantStatus != http.StatusOK {
+		return PaymentResponse{}
 	}
 	var out PaymentResponse
 	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {

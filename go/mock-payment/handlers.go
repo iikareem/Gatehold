@@ -45,6 +45,24 @@ func (s *Server) handleVoid(w http.ResponseWriter, r *http.Request) {
 	s.handleFollowUp(w, r, s.store.Void)
 }
 
+func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
+	s.handleFollowUp(w, r, s.store.Refund)
+}
+
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if s.chaos.MaybeInject(w, r) {
+		return
+	}
+
+	key := r.URL.Query().Get("idempotencyKey")
+	out, err := s.store.GetByKey(r.Context(), key)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) handleFollowUp(
 	w http.ResponseWriter,
 	r *http.Request,

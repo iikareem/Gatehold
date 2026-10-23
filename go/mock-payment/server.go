@@ -25,9 +25,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/payments/authorize", s.handleAuthorize)
 	s.mux.HandleFunc("POST /v1/payments/capture", s.handleCapture)
 	s.mux.HandleFunc("POST /v1/payments/void", s.handleVoid)
-	// Later (Step 7):
-	// POST /v1/payments/refund
-	// GET  /v1/payments/status
+	s.mux.HandleFunc("POST /v1/payments/refund", s.handleRefund)
+	s.mux.HandleFunc("GET /v1/payments/status", s.handleStatus)
 }
 
 // ServeHTTP implements http.Handler.

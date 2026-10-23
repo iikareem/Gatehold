@@ -7,17 +7,21 @@ import (
 
 // Config holds process settings from the environment.
 type Config struct {
-	Port             string
-	ChaosLatencyMS   int
-	ChaosTimeoutRate float64
-	Chaos429Rate     float64
-	ChaosErrorRate   float64
+	Port string
+
+	// Chaos knobs (see docs/contracts.md Phase 5).
+	ChaosLatencyMS   int     // sleep before successful response (0 = off)
+	ChaosTimeoutMS   int     // sleep when simulating timeout (default 30s)
+	ChaosTimeoutRate float64 // probability of timeout-after-success
+	Chaos429Rate     float64 // probability of 429 before accept
+	ChaosErrorRate   float64 // probability of 5xx before accept
 }
 
 func loadConfig() Config {
 	return Config{
 		Port:             envOr("PORT", "8090"),
 		ChaosLatencyMS:   envInt("CHAOS_LATENCY_MS", 0),
+		ChaosTimeoutMS:   envInt("CHAOS_TIMEOUT_MS", 30_000),
 		ChaosTimeoutRate: envFloat("CHAOS_TIMEOUT_RATE", 0),
 		Chaos429Rate:     envFloat("CHAOS_429_RATE", 0),
 		ChaosErrorRate:   envFloat("CHAOS_ERROR_RATE", 0),

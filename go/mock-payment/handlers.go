@@ -8,18 +8,21 @@ import (
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	if s.chaos.MaybeInject(w, r) {
+	if s.chaos.Before(w, r) {
 		return
 	}
 	if err := s.store.Ping(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "STORE_UNAVAILABLE", err.Error())
 		return
 	}
+	if s.chaos.After(w, r) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	if s.chaos.MaybeInject(w, r) {
+	if s.chaos.Before(w, r) {
 		return
 	}
 
@@ -32,6 +35,9 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.Authorize(r.Context(), in)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	if s.chaos.After(w, r) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -50,7 +56,7 @@ func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	if s.chaos.MaybeInject(w, r) {
+	if s.chaos.Before(w, r) {
 		return
 	}
 
@@ -58,6 +64,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.GetByKey(r.Context(), key)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	if s.chaos.After(w, r) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -68,7 +77,7 @@ func (s *Server) handleFollowUp(
 	r *http.Request,
 	fn func(ctx context.Context, in FollowUpInput) (PaymentResponse, error),
 ) {
-	if s.chaos.MaybeInject(w, r) {
+	if s.chaos.Before(w, r) {
 		return
 	}
 
@@ -81,6 +90,9 @@ func (s *Server) handleFollowUp(
 	out, err := fn(r.Context(), in)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	if s.chaos.After(w, r) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

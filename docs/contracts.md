@@ -421,17 +421,19 @@ Phase 6 conditional-writes these with the same idempotency keys so duplicates ar
 
 ### Chaos knobs
 
-Env defaults (process-wide) plus optional per-request override header `X-Chaos-Force` (`429`, `500`, `timeout`, `latency`).
+Env defaults (process-wide) plus optional per-request override header `X-Chaos-Force` (`429`, `500`, `502`, `timeout`, `latency`).
 
 | Knob | Env example | Behavior |
 |---|---|---|
-| Latency | `CHAOS_LATENCY_MS=200` | Sleep before responding |
-| Timeout feel | `CHAOS_TIMEOUT_RATE=0.1` | Delay / close so the client times out; **outcome may already be stored** — client must `GET /status` |
-| Rate limit | `CHAOS_429_RATE=0.2` | `429` + `Retry-After`; no store mutation |
-| Hard errors | `CHAOS_ERROR_RATE=0.1` | `500` / `502` before accept — no store write |
+| Latency | `CHAOS_LATENCY_MS=200` | Sleep after success, before writing the body |
+| Timeout feel | `CHAOS_TIMEOUT_RATE=0.1` + `CHAOS_TIMEOUT_MS=30000` | After store success: sleep, then **drop** the body; **outcome is stored** — client must `GET /status` |
+| Rate limit | `CHAOS_429_RATE=0.2` | `429` + `Retry-After`; **before** store — no mutation |
+| Hard errors | `CHAOS_ERROR_RATE=0.1` | `500` / `502` **before** store — no mutation |
 | Duplicate success | (store idempotency) | Retry same key returns the same body |
 
 **Timeout vs status:** for “timeout after success”, store the outcome **before** applying the delay/drop so `GET /status` is deterministic for that key. For “fail before accept” (`429` / hard error), do not write the store.
+
+Implementation: `Chaos.Before` (fail before accept) and `Chaos.After` (latency / timeout after success) in `go/mock-payment`.
 
 ### Out of scope (later phases)
 

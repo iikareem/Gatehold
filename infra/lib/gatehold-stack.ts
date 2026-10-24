@@ -14,9 +14,10 @@ export interface GateholdStackProps extends cdk.StackProps {
 }
 
 /**
- * Phase 0–4 (partial) stack: Events + Seats + Orders + Idempotency,
- * health + hold-seat + hold-sweeper + create-order (stub), HTTP API,
- * EventBridge Scheduler → sweeper, order SQS (+ DLQ). Handler logic later.
+ * Phase 0–6 (partial) stack: Events + Seats + Orders + Idempotency + Ledger,
+ * health + hold-seat + hold-sweeper + create-order, HTTP API,
+ * EventBridge Scheduler → sweeper, order SQS (+ DLQ).
+ * Saga starter / Step Functions land in later Phase 6 slices.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -68,6 +69,15 @@ export class GateholdStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: removal,
       timeToLiveAttribute: "ttl",
+    });
+
+    // Phase 6 Slice 1a: append-only payment ledger (pk = provider idempotency key).
+    // No writers yet — saga steps append AUTH/CAPTURE/VOID/REFUND in later slices.
+    const ledgerTable = new dynamodb.Table(this, "LedgerTable", {
+      tableName: `gatehold-${stage}-ledger`,
+      partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
     });
 
     const orderDlq = new sqs.Queue(this, "OrderDlq", {
@@ -229,6 +239,9 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "IdempotencyTableName", {
       value: idempotencyTable.tableName,
+    });
+    new cdk.CfnOutput(this, "LedgerTableName", {
+      value: ledgerTable.tableName,
     });
     new cdk.CfnOutput(this, "OrderQueueUrl", {
       value: orderQueue.queueUrl,

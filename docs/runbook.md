@@ -69,7 +69,7 @@ Compose also starts **StackPort** on port `8080`. It is a browser UI only — **
 ```bash
 npm run ministack:ui
 # open http://localhost:8080
-# DynamoDB → gatehold-dev-events / seats / orders / idempotency (after deploy + seed)
+# DynamoDB → gatehold-dev-events / seats / orders / idempotency / ledger (after deploy + seed)
 ```
 
 ### Load local env

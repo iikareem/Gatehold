@@ -166,6 +166,68 @@ export function buildCreateOrderTransactWriteInput(
   };
 }
 
+export interface ConfirmSeatUpdateParams {
+  tableName: string;
+  eventId: string;
+  seatId: string;
+  holdId: string;
+  orderId: string;
+}
+
+export interface ConfirmSeatsTransactParams {
+  seatsTableName: string;
+  eventId: string;
+  holdId: string;
+  orderId: string;
+  seatIds: string[];
+}
+
+/**
+ * Builds Update input for PAYING → SOLD under a specific hold/order.
+ * Idempotent: already SOLD for the same holdId+orderId also succeeds.
+ */
+export function buildConfirmSeatUpdateInput(params: ConfirmSeatUpdateParams) {
+  const { tableName, eventId, seatId, holdId, orderId } = params;
+
+  return {
+    TableName: tableName,
+    Key: { eventId, seatId },
+    UpdateExpression: "SET #status = :sold",
+    ConditionExpression:
+      "holdId = :holdId AND orderId = :orderId AND (#status = :paying OR #status = :sold)",
+    ExpressionAttributeNames: {
+      "#status": "status",
+    },
+    ExpressionAttributeValues: {
+      ":sold": "SOLD",
+      ":paying": "PAYING",
+      ":holdId": holdId,
+      ":orderId": orderId,
+    },
+  };
+}
+
+/**
+ * All seats PAYING→SOLD in one TransactWrite (all-or-nothing).
+ */
+export function buildConfirmSeatsTransactWriteInput(
+  params: ConfirmSeatsTransactParams,
+) {
+  const { seatsTableName, eventId, holdId, orderId, seatIds } = params;
+
+  return {
+    TransactItems: seatIds.map((seatId) => ({
+      Update: buildConfirmSeatUpdateInput({
+        tableName: seatsTableName,
+        eventId,
+        seatId,
+        holdId,
+        orderId,
+      }),
+    })),
+  };
+}
+
 /** Compute payUntil ISO string from a reference time (defaults to Date.now()). */
 export function payUntilAt(
   nowMs: number = Date.now(),

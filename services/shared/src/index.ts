@@ -9,6 +9,7 @@ export type {
   IdempotencyItem,
   OrderQueueMessage,
   SagaInput,
+  AuthorizedSagaState,
   LedgerKind,
   LedgerItem,
 } from "./types";
@@ -39,10 +40,14 @@ export {
   IDEMPOTENCY_TTL_SECONDS,
   buildLockSeatForPaymentUpdateInput,
   buildCreateOrderTransactWriteInput,
+  buildConfirmSeatUpdateInput,
+  buildConfirmSeatsTransactWriteInput,
   payUntilAt,
   idempotencyTtlEpoch,
   type LockSeatForPaymentParams,
   type CreateOrderTransactParams,
+  type ConfirmSeatUpdateParams,
+  type ConfirmSeatsTransactParams,
 } from "./order";
 export {
   buildAppendLedgerPutInput,
@@ -53,9 +58,11 @@ export {
 } from "./ledger";
 export {
   authorizeWithProvider,
+  captureWithProvider,
   isRetryablePaymentStatus,
   PaymentProviderError,
   type AuthorizePaymentRequest,
+  type FollowUpPaymentRequest,
   type PaymentProviderResponse,
 } from "./payment";
 

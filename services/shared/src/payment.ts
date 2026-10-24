@@ -7,6 +7,14 @@ export interface AuthorizePaymentRequest {
   currency: string;
 }
 
+export interface FollowUpPaymentRequest {
+  idempotencyKey: string;
+  orderId: string;
+  authorizationId: string;
+  amount: number;
+  currency: string;
+}
+
 export interface PaymentProviderResponse {
   idempotencyKey: string;
   orderId: string;
@@ -39,7 +47,29 @@ export async function authorizeWithProvider(
   body: AuthorizePaymentRequest,
   fetchFn: typeof fetch = fetch,
 ): Promise<PaymentProviderResponse> {
-  const url = `${baseUrl.replace(/\/$/, "")}/v1/payments/authorize`;
+  return postPayment(baseUrl, "/v1/payments/authorize", body, "authorize", fetchFn);
+}
+
+/**
+ * POST /v1/payments/capture — requires prior AUTHORIZED authorizationId.
+ * Key: pay:capture:{orderId}.
+ */
+export async function captureWithProvider(
+  baseUrl: string,
+  body: FollowUpPaymentRequest,
+  fetchFn: typeof fetch = fetch,
+): Promise<PaymentProviderResponse> {
+  return postPayment(baseUrl, "/v1/payments/capture", body, "capture", fetchFn);
+}
+
+async function postPayment(
+  baseUrl: string,
+  path: string,
+  body: unknown,
+  op: string,
+  fetchFn: typeof fetch,
+): Promise<PaymentProviderResponse> {
+  const url = `${baseUrl.replace(/\/$/, "")}${path}`;
   let response: Response;
   try {
     response = await fetchFn(url, {
@@ -49,7 +79,7 @@ export async function authorizeWithProvider(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new PaymentProviderError(`payment authorize network error: ${message}`, 0);
+    throw new PaymentProviderError(`payment ${op} network error: ${message}`, 0);
   }
 
   const text = await response.text();
@@ -58,7 +88,7 @@ export async function authorizeWithProvider(
     parsed = text ? JSON.parse(text) : {};
   } catch {
     throw new PaymentProviderError(
-      `payment authorize invalid JSON (${response.status})`,
+      `payment ${op} invalid JSON (${response.status})`,
       response.status,
     );
   }
@@ -66,7 +96,7 @@ export async function authorizeWithProvider(
   if (!response.ok) {
     const errBody = parsed as { error?: string; code?: string };
     throw new PaymentProviderError(
-      errBody.error || `payment authorize failed (${response.status})`,
+      errBody.error || `payment ${op} failed (${response.status})`,
       response.status,
       errBody.code,
     );

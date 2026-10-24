@@ -77,6 +77,16 @@ export interface OrderQueueMessage {
 /** Alias — saga starts with the SQS message body. */
 export type SagaInput = OrderQueueMessage;
 
+/**
+ * Saga state after AuthorizePayment — passed to ConfirmSeat / Capture / etc.
+ */
+export interface AuthorizedSagaState extends SagaInput {
+  amount: number;
+  currency: string;
+  authorizationId: string;
+  providerPaymentId?: string;
+}
+
 /** Append-only payment ledger kinds — keep in sync with docs/contracts.md. */
 export type LedgerKind = "AUTH" | "CAPTURE" | "VOID" | "REFUND";
 

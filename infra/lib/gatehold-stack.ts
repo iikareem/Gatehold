@@ -175,8 +175,8 @@ export class GateholdStack extends cdk.Stack {
       environment: lambdaEnv,
     });
 
-    // Phase 6: VerifyHold → AuthorizePayment → Succeed
-    // (Slice 3 LockSeat assert / Slice 5 ConfirmSeat next).
+    // Phase 6: VerifyHold → AuthorizePayment → ConfirmSeat → Succeed
+    // (Slice 3 LockSeat assert still pending).
     const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
       functionName: `gatehold-${stage}-verify-hold`,
       entry: path.join(
@@ -235,6 +235,40 @@ export class GateholdStack extends cdk.Stack {
       backoffRate: 2,
     });
 
+    const confirmSeatFn = new NodejsFunction(this, "ConfirmSeatFn", {
+      functionName: `gatehold-${stage}-confirm-seat`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-steps/src/confirm-seat.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: lambdaEnv,
+      bundling,
+      projectRoot,
+    });
+
+    const capturePaymentFn = new NodejsFunction(this, "CapturePaymentFn", {
+      functionName: `gatehold-${stage}-capture-payment`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-steps/src/capture-payment.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        ...lambdaEnv,
+        LEDGER_TABLE_NAME: ledgerTable.tableName,
+        MOCK_PAYMENT_URL: mockPaymentUrl,
+      },
+      bundling,
+      projectRoot,
+    });
+
     const authorizePaymentTask = new tasks.LambdaInvoke(
       this,
       "AuthorizePayment",
@@ -251,9 +285,35 @@ export class GateholdStack extends cdk.Stack {
       backoffRate: 2,
     });
 
+    const confirmSeatTask = new tasks.LambdaInvoke(this, "ConfirmSeat", {
+      lambdaFunction: confirmSeatFn,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    confirmSeatTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
+    const capturePaymentTask = new tasks.LambdaInvoke(this, "CapturePayment", {
+      lambdaFunction: capturePaymentFn,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    capturePaymentTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
     const sagaDefinition = verifyHoldTask
       .next(authorizePaymentTask)
-      .next(new sfn.Succeed(this, "SagaAuthorizeDone"));
+      .next(confirmSeatTask)
+      .next(capturePaymentTask)
+      .next(new sfn.Succeed(this, "SagaCaptureDone"));
     const purchaseSaga = new sfn.StateMachine(this, "PurchaseSaga", {
       stateMachineName: `gatehold-${stage}-purchase-saga`,
       definitionBody: sfn.DefinitionBody.fromChainable(sagaDefinition),
@@ -305,6 +365,10 @@ export class GateholdStack extends cdk.Stack {
 
     ledgerTable.grantReadWriteData(authorizePaymentFn);
     ordersTable.grantReadWriteData(authorizePaymentFn);
+
+    seatsTable.grantReadWriteData(confirmSeatFn);
+
+    ledgerTable.grantReadWriteData(capturePaymentFn);
 
     // Timer only (not the Phase 7 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {
@@ -387,6 +451,12 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "AuthorizePaymentFunctionName", {
       value: authorizePaymentFn.functionName,
+    });
+    new cdk.CfnOutput(this, "ConfirmSeatFunctionName", {
+      value: confirmSeatFn.functionName,
+    });
+    new cdk.CfnOutput(this, "CapturePaymentFunctionName", {
+      value: capturePaymentFn.functionName,
     });
     new cdk.CfnOutput(this, "MockPaymentUrl", {
       value: mockPaymentUrl,

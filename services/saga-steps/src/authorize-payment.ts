@@ -13,7 +13,10 @@ import {
   isRetryablePaymentStatus,
   PaymentProviderError,
 } from "../../shared/src/payment";
-import type { SagaInput } from "../../shared/src/types";
+import type {
+  AuthorizedSagaState,
+  SagaInput,
+} from "../../shared/src/types";
 
 /**
  * Business / non-retryable authorize failure.
@@ -35,13 +38,8 @@ export class TransientError extends Error {
   }
 }
 
-/** Saga state after AuthorizePayment — carries auth ids for later steps. */
-export interface AuthorizePaymentResult extends SagaInput {
-  amount: number;
-  currency: string;
-  authorizationId: string;
-  providerPaymentId?: string;
-}
+/** @deprecated Prefer AuthorizedSagaState from shared types. */
+export type AuthorizePaymentResult = AuthorizedSagaState;
 
 /**
  * Phase 6 Slice 4 — AuthorizePayment.
@@ -51,7 +49,7 @@ export interface AuthorizePaymentResult extends SagaInput {
  */
 export async function handler(
   event: SagaInput,
-): Promise<AuthorizePaymentResult> {
+): Promise<AuthorizedSagaState> {
   const ledgerTable = requireEnv("LEDGER_TABLE_NAME");
   const ordersTable = requireEnv("ORDERS_TABLE_NAME");
   const mockBase = requireEnv("MOCK_PAYMENT_URL");
@@ -109,7 +107,7 @@ export async function handler(
 
   await setOrderAmountIfMissing(ordersTable, event.orderId, amount);
 
-  const result: AuthorizePaymentResult = {
+  const result: AuthorizedSagaState = {
     ...event,
     amount: provider.amount,
     currency: provider.currency,

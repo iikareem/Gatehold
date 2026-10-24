@@ -89,7 +89,7 @@ npm run ministack:up
 npm run deploy:local    # cdklocal bootstrap + deploy → writes .cdk-outputs.json
 ```
 
-Deploys Events, Seats, **Orders**, **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga (`VerifyHold` → `AuthorizePayment` → Succeed), and `POST /orders`. For AuthorizePayment, run mock payment on the host (`cd go && go run ./mock-payment`) — Lambdas reach it via `host.docker.internal:8090`.
+Deploys Events, Seats, **Orders**, **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga (`VerifyHold` → `AuthorizePayment` → `ConfirmSeat` → `CapturePayment` → Succeed), and `POST /orders`. For payment steps, run mock payment on the host (`cd go && go run ./mock-payment`) — Lambdas reach it via `host.docker.internal:8090`.
 
 ### Seed event + seats
 

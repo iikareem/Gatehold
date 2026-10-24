@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   IDEMPOTENCY_TTL_SECONDS,
   PAY_WINDOW_MS,
+  buildConfirmSeatUpdateInput,
+  buildConfirmSeatsTransactWriteInput,
   buildCreateOrderTransactWriteInput,
   buildLockSeatForPaymentUpdateInput,
   idempotencyTtlEpoch,
@@ -108,6 +110,46 @@ describe("buildCreateOrderTransactWriteInput", () => {
     assert.deepEqual(orderPut?.Item?.seatIds, ["A-12-10", "A-12-11"]);
     assert.equal(orderPut?.Item?.idempotencyKey, "idem-1");
     assert.equal(orderPut?.ConditionExpression, "attribute_not_exists(orderId)");
+  });
+});
+
+describe("buildConfirmSeatUpdateInput", () => {
+  const input = buildConfirmSeatUpdateInput({
+    tableName: "gatehold-dev-seats",
+    eventId: "evt_001",
+    seatId: "A-12-07",
+    holdId: "h_1",
+    orderId: "ord_1",
+  });
+
+  it("sets SOLD with PAYING-or-already-SOLD condition", () => {
+    assert.equal(input.ExpressionAttributeValues[":sold"], "SOLD");
+    assert.equal(input.ExpressionAttributeValues[":paying"], "PAYING");
+    assert.match(
+      input.ConditionExpression,
+      /holdId = :holdId AND orderId = :orderId/,
+    );
+    assert.match(
+      input.ConditionExpression,
+      /#status = :paying OR #status = :sold/,
+    );
+  });
+});
+
+describe("buildConfirmSeatsTransactWriteInput", () => {
+  it("one Update per seat", () => {
+    const input = buildConfirmSeatsTransactWriteInput({
+      seatsTableName: "gatehold-dev-seats",
+      eventId: "evt_001",
+      holdId: "h_1",
+      orderId: "ord_1",
+      seatIds: ["A-12-07", "A-12-08"],
+    });
+    assert.equal(input.TransactItems.length, 2);
+    assert.equal(
+      input.TransactItems[0]?.Update?.Key?.seatId,
+      "A-12-07",
+    );
   });
 });
 

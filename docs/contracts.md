@@ -471,6 +471,31 @@ ASL: retry `TransientError` only (throttling / DynamoDB blips). Do **not** retry
 
 ASL: retry `TransientError` (network / `429` / `5xx`). Do **not** retry `AuthorizePaymentError`.
 
+### ConfirmSeat (saga Task)
+
+After funds are authorized, sell inventory:
+
+```
+TransactWrite all seatIds
+  SET #status = SOLD
+  CONDITION holdId = :h AND orderId = :o AND (#status = PAYING OR #status = SOLD)
+```
+
+All-or-nothing. Idempotent if already `SOLD` for this hold/order. Passes saga state through (keeps `authorizationId` for Capture).
+
+ASL: retry `TransientError` only. Do **not** retry `ConfirmSeatError`.
+
+### CapturePayment (saga Task)
+
+After seats are `SOLD`, take the money:
+
+1. `POST {MOCK_PAYMENT_URL}/v1/payments/capture` with `idempotencyKey = pay:capture:{orderId}`, `authorizationId` from saga state, same amount/currency.
+2. On provider `CAPTURED`: append ledger `CAPTURE` with conditional Put `attribute_not_exists(pk)`.
+3. `ConditionalCheckFailed` → already recorded; treat as success.
+4. Pass saga state through for later IssueTicket / MarkConfirmed.
+
+ASL: retry `TransientError` only. Do **not** retry `CapturePaymentError`.
+
 ### LockSeatForPayment in the saga
 
 Phase 4 accept already runs `HELD → PAYING` and sets `orderId` + `payUntil` (see Create-order transaction above).
@@ -532,7 +557,7 @@ Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga i
 
 ## TODO (later phases)
 
-- Conditional write expressions for confirm / payment release (`PAYING→SOLD`, compensation release) — implement with saga steps
+- Conditional write expressions for payment release / compensation — ConfirmSeat (`PAYING→SOLD`) is in saga; release path later
 - SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

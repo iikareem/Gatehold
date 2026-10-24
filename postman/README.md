@@ -15,6 +15,7 @@
 | **Health** | Liveness, Get seat | Smoke / inspect seat status |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` |
+| **Saga logs** | Filter verify-hold logs | MiniStack CloudWatch `FilterLogEvents` for VerifyHold |
 | **Mock payment** | Authorize → Capture/Void/Refund + Status | Local `go/mock-payment` on `paymentBase` |
 
 Variants (409, 400, chaos, idempotent retry) are under **Examples** on those requests — not separate top-level calls (except **Authorize (chaos)**).
@@ -23,7 +24,8 @@ Variants (409, 400, chaos, idempotent retry) are under **Examples** on those req
 
 1. **Holds → Hold seats** (saves `holdId` + `seatIdsJson`)  
 2. **Orders → Accept order** (uses that hold; sets `orderId`)  
-3. **Health → Get seat** (expect `PAYING`)
+3. **Health → Get seat** (expect `PAYING`)  
+4. **Saga logs → Filter verify-hold logs** (look for `verify-hold ok` in `events[].message`)
 
 ### Happy path (mock payment)
 

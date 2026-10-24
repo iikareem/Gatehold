@@ -445,6 +445,22 @@ Implementation: `Chaos.Before` (fail before accept) and `Chaos.After` (latency /
 
 **Goal:** Document money journal and saga handoff shapes before wiring Step Functions. No runtime tables/Lambdas in this slice — types and contracts only.
 
+### VerifyHold (saga Task)
+
+Read-only gate before payment. Loads DynamoDB and **throws** (Task failure) if any check fails. Later Catch/compensation; until then a failed execution is expected.
+
+Checks (all must pass):
+
+| Entity | Required |
+|---|---|
+| Order | exists, `status = PENDING`, `eventId` / `holdId` / `seatIds` match saga input |
+| Event | exists, `status = ON_SALE` |
+| Each seat | exists, `status = PAYING`, `holdId` + `orderId` match input, `payUntil > now` |
+
+On success: return saga input unchanged (no writes).
+
+ASL: retry `TransientError` only (throttling / DynamoDB blips). Do **not** retry `VerifyHoldError`.
+
 ### LockSeatForPayment in the saga
 
 Phase 4 accept already runs `HELD → PAYING` and sets `orderId` + `payUntil` (see Create-order transaction above).

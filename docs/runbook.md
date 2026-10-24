@@ -89,7 +89,7 @@ npm run ministack:up
 npm run deploy:local    # cdklocal bootstrap + deploy → writes .cdk-outputs.json
 ```
 
-Deploys Events, Seats, **Orders**, **Idempotency**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, and `POST /orders`. No order-queue consumer yet.
+Deploys Events, Seats, **Orders**, **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga (`VerifyHold` → Succeed), and `POST /orders`.
 
 ### Seed event + seats
 

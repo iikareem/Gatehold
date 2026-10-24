@@ -20,7 +20,7 @@ export interface GateholdStackProps extends cdk.StackProps {
  * Phase 0–6 (partial) stack: Events + Seats + Orders + Idempotency + Ledger,
  * health + hold-seat + hold-sweeper + create-order, HTTP API,
  * EventBridge Scheduler → sweeper, order SQS (+ DLQ),
- * purchase saga skeleton (VerifyHold stub → Succeed) + saga-starter.
+ * purchase saga (VerifyHold → Succeed) + saga-starter.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -175,7 +175,7 @@ export class GateholdStack extends cdk.Stack {
       environment: lambdaEnv,
     });
 
-    // Phase 6 Slice 1: VerifyHold stub + purchase saga skeleton.
+    // Phase 6 Slice 2: VerifyHold (real checks) + purchase saga skeleton end.
     const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
       functionName: `gatehold-${stage}-verify-hold`,
       entry: path.join(
@@ -186,7 +186,10 @@ export class GateholdStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.seconds(10),
       memorySize: 256,
-      environment: lambdaEnv,
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+      },
       bundling,
       projectRoot,
     });
@@ -196,7 +199,14 @@ export class GateholdStack extends cdk.Stack {
       outputPath: "$.Payload",
       retryOnServiceExceptions: true,
     });
-
+    // Retry only transient DynamoDB/infra errors thrown as TransientError.
+    // VerifyHoldError (business fail) is not listed → fails the execution.
+    verifyHoldTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
 
     const sagaDefinition = verifyHoldTask.next(
       new sfn.Succeed(this, "SagaSkeletonDone"),
@@ -245,6 +255,10 @@ export class GateholdStack extends cdk.Stack {
 
     ordersTable.grantReadWriteData(sagaStarterFn);
     purchaseSaga.grantStartExecution(sagaStarterFn);
+
+    eventsTable.grantReadData(verifyHoldFn);
+    seatsTable.grantReadData(verifyHoldFn);
+    ordersTable.grantReadData(verifyHoldFn);
 
     // Timer only (not the Phase 7 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {

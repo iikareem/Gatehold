@@ -251,7 +251,7 @@ Start the next unfinished phase below.
 - Replace the temporary SQS consumer with a saga starter (execution name = `orderId`)
 - Implement saga steps in TypeScript (shared package or `saga-steps`):
   1. VerifyHold  
-  2. LockSeatForPayment (`HELD → PAYING`, set `payUntil`) — group-aware  
+  2. LockSeatForPayment — **assert** still `PAYING` / matching `holdId`+`orderId` / `payUntil` valid (Phase 4 already did `HELD → PAYING`)  
   3. AuthorizePayment  
   4. CheckPaymentStatus (on timeout / unknown)  
   5. ConfirmSeat (`PAYING → SOLD`)  
@@ -259,8 +259,9 @@ Start the next unfinished phase below.
   7. IssueTicket (Phase 9 can stub S3/KMS; for now write a placeholder ticket record)  
   8. MarkConfirmed  
 - Compensation: VoidAuthorization, RefundPayment, ReleaseSeat, MarkFailed, MarkRefunded
-- Ledger conditional writes for `AUTH` / `CAPTURE` / `VOID` / `REFUND`
+- Ledger conditional writes for `AUTH` / `CAPTURE` / `VOID` / `REFUND` (schema in `contracts.md` Slice 0)
 - Failure tests: payment timeout, hold expires during payment, confirm fails after auth
+- Build incrementally: contracts → skeleton ASL → one step at a time (see learning slices)
 
 **Learn**
 

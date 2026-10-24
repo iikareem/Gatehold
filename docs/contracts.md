@@ -47,6 +47,7 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 - Seats: `A-12-01` … `A-12-50`, all `AVAILABLE`
 - Tables: `gatehold-{stage}-events`, `gatehold-{stage}-seats`
 - Phase 4+: `gatehold-{stage}-orders`, `gatehold-{stage}-idempotency`
+- Phase 6+: `gatehold-{stage}-ledger`
 
 ## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
@@ -263,11 +264,11 @@ After txn success: `SendMessage` to order SQS, then update idempotency to `ACCEP
 
 Shared builders: `buildLockSeatForPaymentUpdateInput`, `buildCreateOrderTransactWriteInput`, `payUntilAt`, `idempotencyTtlEpoch` in `services/shared/src/order.ts` (`PAY_WINDOW_MS` = 15 minutes).
 
-### Order SQS message (Phase 4)
+### Order SQS message (Phase 4+)
 
-Queue: order queue (+ DLQ configured; **no consumer** in Phase 4 — messages remain until a later phase).
+Queue: order queue (+ DLQ). Phase 4 had no consumer; Phase 6 saga-starter drains it and starts Step Functions (`execution name` = `orderId`).
 
-Payload (JSON body):
+Payload (JSON body) — also the **saga execution input**:
 
 ```json
 {
@@ -278,6 +279,8 @@ Payload (JSON body):
   "userId": "test-user"
 }
 ```
+
+Optional later fields on the execution state (not required on the SQS body): `amount`, `authorizationId`, `currency`.
 
 ## Phase 5 — Mock payment provider (`go/mock-payment`)
 
@@ -406,9 +409,7 @@ Error body:
 { "error": "human-readable message", "code": "MACHINE_CODE" }
 ```
 
-### Ledger kinds (Phase 6 writes; document now)
-
-The DynamoDB ledger (not built in Phase 5) will use append-only kinds mapped from provider outcomes:
+### Ledger kinds (mapped from provider status)
 
 | Ledger kind | After provider status |
 |---|---|
@@ -417,7 +418,7 @@ The DynamoDB ledger (not built in Phase 5) will use append-only kinds mapped fro
 | `VOID` | `VOIDED` |
 | `REFUND` | `REFUNDED` |
 
-Phase 6 conditional-writes these with the same idempotency keys so duplicates are rejected. The mock only returns statuses; it does not write the ledger.
+The mock only returns statuses; it does **not** write the ledger. Saga steps append after a successful provider call (or after `GET /status` resolves an unknown outcome).
 
 ### Chaos knobs
 
@@ -437,12 +438,75 @@ Implementation: `Chaos.Before` (fail before accept) and `Chaos.After` (latency /
 
 ### Out of scope (later phases)
 
-- Step Functions saga client, DynamoDB ledger table, Secrets Manager URL (Phases 6 / 8)
-- Curls for live smoke → [`api.md`](./api.md) once the server exists
+- Secrets Manager for mock-payment URL (Phase 8; env var is fine in Phase 6)
+- Curls for live smoke → [`api.md`](./api.md)
+
+## Phase 6 — Ledger + saga contracts (Slice 0)
+
+**Goal:** Document money journal and saga handoff shapes before wiring Step Functions. No runtime tables/Lambdas in this slice — types and contracts only.
+
+### LockSeatForPayment in the saga
+
+Phase 4 accept already runs `HELD → PAYING` and sets `orderId` + `payUntil` (see Create-order transaction above).
+
+The saga step named `LockSeatForPayment` **asserts** that every seat in the order is still:
+
+- `status = PAYING`
+- `holdId` and `orderId` match the saga input
+- `payUntil > now`
+
+It does **not** perform a second `HELD → PAYING`. Idempotent: if already locked for this order, succeed.
+
+### Amount
+
+Until pricing exists, authorize/capture use `ORDER_AMOUNT_CENTS` (default `5000`, integer cents, `currency` = `USD`). Saga may persist `amount` on the order when authorizing if missing.
+
+### Ledger table
+
+Table name: `gatehold-{stage}-ledger`
+
+Append-only. One row per money event. PK = the same provider idempotency key the saga sends to mock-payment.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `pk` (PK) | string | Idempotency key, e.g. `pay:auth:ord_…` |
+| `kind` | string | `AUTH` \| `CAPTURE` \| `VOID` \| `REFUND` |
+| `orderId` | string | Order this event belongs to |
+| `amount` | number | Integer cents |
+| `currency` | string | e.g. `USD` |
+| `providerPaymentId` | string | Optional; provider `paymentId` |
+| `authorizationId` | string | Optional; provider auth id (auth/capture/void) |
+| `createdAt` | string | ISO-8601 |
+
+**Write rule:**
+
+```
+Put ledger item
+  pk, kind, orderId, amount, currency, …, createdAt
+  CONDITION attribute_not_exists(pk)
+```
+
+- Success → first commit of this money event.
+- `ConditionalCheckFailed` → already recorded; treat as success for retries (skip re-calling the provider, or confirm via `GET /status`).
+
+Never update a ledger row in place. New money outcome = new `pk` / new row (e.g. auth then capture are two rows).
+
+### Saga step → ledger
+
+| Step | Key | Kind on success |
+|---|---|---|
+| AuthorizePayment | `pay:auth:{orderId}` | `AUTH` |
+| CapturePayment | `pay:capture:{orderId}` | `CAPTURE` |
+| VoidAuthorization | `pay:void:{orderId}` | `VOID` |
+| RefundPayment | `pay:refund:{orderId}` | `REFUND` |
+
+### Shared types
+
+Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga input) in `services/shared/src/types.ts`.
 
 ## TODO (later phases)
 
-- Conditional write expressions for confirm / payment release (`PAYING→SOLD`, compensation release)
+- Conditional write expressions for confirm / payment release (`PAYING→SOLD`, compensation release) — implement with saga steps
 - SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

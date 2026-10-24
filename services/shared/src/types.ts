@@ -62,11 +62,57 @@ export interface IdempotencyItem {
   ttl?: number;
 }
 
-/** Phase 4 order queue payload (no consumer yet). */
+/**
+ * Phase 4+ order queue payload.
+ * Phase 6: same shape is the Step Functions execution input (starter passes body through).
+ */
 export interface OrderQueueMessage {
   orderId: string;
   eventId: string;
   holdId: string;
   seatIds: string[];
   userId: string;
+}
+
+/** Alias — saga starts with the SQS message body. */
+export type SagaInput = OrderQueueMessage;
+
+/** Append-only payment ledger kinds — keep in sync with docs/contracts.md. */
+export type LedgerKind = "AUTH" | "CAPTURE" | "VOID" | "REFUND";
+
+/**
+ * One money event in `gatehold-{stage}-ledger`.
+ * `pk` is the provider idempotency key (e.g. `pay:auth:{orderId}`).
+ */
+export interface LedgerItem {
+  pk: string;
+  kind: LedgerKind;
+  orderId: string;
+  amount: number;
+  currency: string;
+  providerPaymentId?: string;
+  authorizationId?: string;
+  createdAt: string;
+}
+
+/** Default authorize/capture amount (cents) until pricing exists. */
+export const DEFAULT_ORDER_AMOUNT_CENTS = 5000;
+
+export const LEDGER_CURRENCY_USD = "USD";
+
+/** Payment idempotency key helpers — same formats as mock-payment contracts. */
+export function paymentAuthKey(orderId: string): string {
+  return `pay:auth:${orderId}`;
+}
+
+export function paymentCaptureKey(orderId: string): string {
+  return `pay:capture:${orderId}`;
+}
+
+export function paymentVoidKey(orderId: string): string {
+  return `pay:void:${orderId}`;
+}
+
+export function paymentRefundKey(orderId: string): string {
+  return `pay:refund:${orderId}`;
 }

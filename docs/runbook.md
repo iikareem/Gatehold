@@ -177,7 +177,8 @@ curl http://localhost:4566/_ministack/ses/messages
 After deploy + seed, follow hold → order → idempotent retry in [`api.md`](./api.md) (§8–10).
 
 ```bash
-# Messages remain on the order queue until a later-phase consumer exists
+# Phase 6+: saga-starter drains the order queue and starts Step Functions
+# (execution name = orderId). Inspect leftover messages / DLQ if needed:
 curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
 
 # Stack outputs also include OrderQueueUrl / OrdersTableName / IdempotencyTableName

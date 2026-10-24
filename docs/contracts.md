@@ -266,7 +266,7 @@ Shared builders: `buildLockSeatForPaymentUpdateInput`, `buildCreateOrderTransact
 
 ### Order SQS message (Phase 4+)
 
-Queue: order queue (+ DLQ). Phase 4 had no consumer; Phase 6 saga-starter drains it and starts Step Functions (`execution name` = `orderId`).
+Queue: order queue (+ DLQ). Phase 6 **saga-starter** drains it and calls `StartExecution` on the purchase saga (`execution name` = `orderId`). Duplicate deliveries that hit `ExecutionAlreadyExists` are acked (no second run). On success the starter may set `order.executionArn`.
 
 Payload (JSON body) — also the **saga execution input**:
 

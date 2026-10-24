@@ -25,6 +25,7 @@ export {
 export { requireEnv, optionalEnv } from "./env";
 export { createDynamoDBClient, getDocClient } from "./dynamodb";
 export { createSqsClient, getSqsClient } from "./sqs";
+export { createSfnClient, getSfnClient } from "./sfn";
 export {
   HOLD_DURATION_MS,
   buildHoldSeatUpdateInput,

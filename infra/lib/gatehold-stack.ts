@@ -3,10 +3,13 @@ import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as sfn from "aws-cdk-lib/aws-stepfunctions";
+import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
 
 export interface GateholdStackProps extends cdk.StackProps {
@@ -16,8 +19,8 @@ export interface GateholdStackProps extends cdk.StackProps {
 /**
  * Phase 0–6 (partial) stack: Events + Seats + Orders + Idempotency + Ledger,
  * health + hold-seat + hold-sweeper + create-order, HTTP API,
- * EventBridge Scheduler → sweeper, order SQS (+ DLQ).
- * Saga starter / Step Functions land in later Phase 6 slices.
+ * EventBridge Scheduler → sweeper, order SQS (+ DLQ),
+ * purchase saga skeleton (VerifyHold stub → Succeed) + saga-starter.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -87,7 +90,8 @@ export class GateholdStack extends cdk.Stack {
     });
     const orderQueue = new sqs.Queue(this, "OrderQueue", {
       queueName: `gatehold-${stage}-orders`,
-      visibilityTimeout: cdk.Duration.seconds(60),
+      // Must exceed saga-starter timeout (SFN start + order update).
+      visibilityTimeout: cdk.Duration.seconds(90),
       retentionPeriod: cdk.Duration.days(4),
       removalPolicy: removal,
       deadLetterQueue: {
@@ -171,6 +175,63 @@ export class GateholdStack extends cdk.Stack {
       environment: lambdaEnv,
     });
 
+    // Phase 6 Slice 1: VerifyHold stub + purchase saga skeleton.
+    const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
+      functionName: `gatehold-${stage}-verify-hold`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-steps/src/verify-hold.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: lambdaEnv,
+      bundling,
+      projectRoot,
+    });
+
+    const verifyHoldTask = new tasks.LambdaInvoke(this, "VerifyHold", {
+      lambdaFunction: verifyHoldFn,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+
+
+    const sagaDefinition = verifyHoldTask.next(
+      new sfn.Succeed(this, "SagaSkeletonDone"),
+    );
+    const purchaseSaga = new sfn.StateMachine(this, "PurchaseSaga", {
+      stateMachineName: `gatehold-${stage}-purchase-saga`,
+      definitionBody: sfn.DefinitionBody.fromChainable(sagaDefinition),
+      tracingEnabled: false,
+    });
+
+    const sagaStarterFn = new NodejsFunction(this, "SagaStarterFn", {
+      functionName: `gatehold-${stage}-saga-starter`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-starter/src/handler.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+        PURCHASE_SAGA_ARN: purchaseSaga.stateMachineArn,
+      },
+      bundling,
+      projectRoot,
+    });
+    sagaStarterFn.addEventSource(
+      new SqsEventSource(orderQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true,
+      }),
+    );
+
     eventsTable.grantReadData(healthFn);
     seatsTable.grantReadData(healthFn);
     seatsTable.grantReadWriteData(holdSeatFn);
@@ -181,6 +242,9 @@ export class GateholdStack extends cdk.Stack {
     ordersTable.grantReadWriteData(createOrderFn);
     idempotencyTable.grantReadWriteData(createOrderFn);
     orderQueue.grantSendMessages(createOrderFn);
+
+    ordersTable.grantReadWriteData(sagaStarterFn);
+    purchaseSaga.grantStartExecution(sagaStarterFn);
 
     // Timer only (not the Phase 7 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {
@@ -251,6 +315,15 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "OrderDlqUrl", {
       value: orderDlq.queueUrl,
+    });
+    new cdk.CfnOutput(this, "PurchaseSagaArn", {
+      value: purchaseSaga.stateMachineArn,
+    });
+    new cdk.CfnOutput(this, "SagaStarterFunctionName", {
+      value: sagaStarterFn.functionName,
+    });
+    new cdk.CfnOutput(this, "VerifyHoldFunctionName", {
+      value: verifyHoldFn.functionName,
     });
   }
 }

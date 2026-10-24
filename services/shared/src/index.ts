@@ -44,6 +44,20 @@ export {
   type LockSeatForPaymentParams,
   type CreateOrderTransactParams,
 } from "./order";
+export {
+  buildAppendLedgerPutInput,
+  appendLedgerItem,
+  buildLedgerItem,
+  isConditionalCheckFailed,
+  type AppendLedgerParams,
+} from "./ledger";
+export {
+  authorizeWithProvider,
+  isRetryablePaymentStatus,
+  PaymentProviderError,
+  type AuthorizePaymentRequest,
+  type PaymentProviderResponse,
+} from "./payment";
 
 /** Zero-pad a seat number so row range queries sort correctly (e.g. 7 → "07"). */
 export function formatSeatId(

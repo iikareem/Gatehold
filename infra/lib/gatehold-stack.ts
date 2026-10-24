@@ -175,7 +175,8 @@ export class GateholdStack extends cdk.Stack {
       environment: lambdaEnv,
     });
 
-    // Phase 6 Slice 2: VerifyHold (real checks) + purchase saga skeleton end.
+    // Phase 6: VerifyHold → AuthorizePayment → Succeed
+    // (Slice 3 LockSeat assert / Slice 5 ConfirmSeat next).
     const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
       functionName: `gatehold-${stage}-verify-hold`,
       entry: path.join(
@@ -189,6 +190,32 @@ export class GateholdStack extends cdk.Stack {
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
+      },
+      bundling,
+      projectRoot,
+    });
+
+    const mockPaymentUrl = dockerReachableEndpoint(
+      process.env.MOCK_PAYMENT_URL || "http://127.0.0.1:8090",
+    );
+    const authorizePaymentFn = new NodejsFunction(this, "AuthorizePaymentFn", {
+      functionName: `gatehold-${stage}-authorize-payment`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-steps/src/authorize-payment.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+        LEDGER_TABLE_NAME: ledgerTable.tableName,
+        MOCK_PAYMENT_URL: mockPaymentUrl,
+        ORDER_AMOUNT_CENTS:
+          process.env.ORDER_AMOUNT_CENTS ||
+          String(5000),
       },
       bundling,
       projectRoot,
@@ -208,9 +235,25 @@ export class GateholdStack extends cdk.Stack {
       backoffRate: 2,
     });
 
-    const sagaDefinition = verifyHoldTask.next(
-      new sfn.Succeed(this, "SagaSkeletonDone"),
+    const authorizePaymentTask = new tasks.LambdaInvoke(
+      this,
+      "AuthorizePayment",
+      {
+        lambdaFunction: authorizePaymentFn,
+        outputPath: "$.Payload",
+        retryOnServiceExceptions: true,
+      },
     );
+    authorizePaymentTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
+    const sagaDefinition = verifyHoldTask
+      .next(authorizePaymentTask)
+      .next(new sfn.Succeed(this, "SagaAuthorizeDone"));
     const purchaseSaga = new sfn.StateMachine(this, "PurchaseSaga", {
       stateMachineName: `gatehold-${stage}-purchase-saga`,
       definitionBody: sfn.DefinitionBody.fromChainable(sagaDefinition),
@@ -259,6 +302,9 @@ export class GateholdStack extends cdk.Stack {
     eventsTable.grantReadData(verifyHoldFn);
     seatsTable.grantReadData(verifyHoldFn);
     ordersTable.grantReadData(verifyHoldFn);
+
+    ledgerTable.grantReadWriteData(authorizePaymentFn);
+    ordersTable.grantReadWriteData(authorizePaymentFn);
 
     // Timer only (not the Phase 7 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {
@@ -338,6 +384,12 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "VerifyHoldFunctionName", {
       value: verifyHoldFn.functionName,
+    });
+    new cdk.CfnOutput(this, "AuthorizePaymentFunctionName", {
+      value: authorizePaymentFn.functionName,
+    });
+    new cdk.CfnOutput(this, "MockPaymentUrl", {
+      value: mockPaymentUrl,
     });
   }
 }

@@ -461,6 +461,16 @@ On success: return saga input unchanged (no writes).
 
 ASL: retry `TransientError` only (throttling / DynamoDB blips). Do **not** retry `VerifyHoldError`.
 
+### AuthorizePayment (saga Task)
+
+1. `POST {MOCK_PAYMENT_URL}/v1/payments/authorize` with `idempotencyKey = pay:auth:{orderId}`, amount from `ORDER_AMOUNT_CENTS` (default `5000`), `currency = USD`.
+2. On provider `AUTHORIZED`: append ledger `AUTH` with **conditional Put** `attribute_not_exists(pk)` (`pk` = same key).
+3. `ConditionalCheckFailed` → already recorded; treat as success (mock key + Put are the safety net — no Get-before required).
+4. Return saga input plus `authorizationId`, `amount`, `currency` (and optional `providerPaymentId`) for later steps.
+5. Optionally `SET amount = if_not_exists(amount, :amount)` on the order.
+
+ASL: retry `TransientError` (network / `429` / `5xx`). Do **not** retry `AuthorizePaymentError`.
+
 ### LockSeatForPayment in the saga
 
 Phase 4 accept already runs `HELD → PAYING` and sets `orderId` + `payUntil` (see Create-order transaction above).

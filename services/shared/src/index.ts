@@ -10,6 +10,7 @@ export type {
   OrderQueueMessage,
   SagaInput,
   AuthorizedSagaState,
+  TicketedSagaState,
   LedgerKind,
   LedgerItem,
 } from "./types";
@@ -21,6 +22,8 @@ export {
   paymentCaptureKey,
   paymentVoidKey,
   paymentRefundKey,
+  placeholderTicketId,
+  placeholderTicketIds,
 } from "./types";
 
 export { requireEnv, optionalEnv } from "./env";
@@ -42,12 +45,16 @@ export {
   buildCreateOrderTransactWriteInput,
   buildConfirmSeatUpdateInput,
   buildConfirmSeatsTransactWriteInput,
+  buildIssueTicketsUpdateInput,
+  buildMarkConfirmedUpdateInput,
   payUntilAt,
   idempotencyTtlEpoch,
   type LockSeatForPaymentParams,
   type CreateOrderTransactParams,
   type ConfirmSeatUpdateParams,
   type ConfirmSeatsTransactParams,
+  type IssueTicketsUpdateParams,
+  type MarkConfirmedUpdateParams,
 } from "./order";
 export {
   buildAppendLedgerPutInput,

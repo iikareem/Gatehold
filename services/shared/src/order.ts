@@ -228,6 +228,66 @@ export function buildConfirmSeatsTransactWriteInput(
   };
 }
 
+export interface IssueTicketsUpdateParams {
+  tableName: string;
+  orderId: string;
+  ticketIds: string[];
+}
+
+export interface MarkConfirmedUpdateParams {
+  tableName: string;
+  orderId: string;
+  /** Optional — only set when missing (starter usually already wrote it). */
+  executionArn?: string;
+}
+
+/**
+ * Writes placeholder ticketIds on the order once (idempotent retries).
+ */
+export function buildIssueTicketsUpdateInput(params: IssueTicketsUpdateParams) {
+  const { tableName, orderId, ticketIds } = params;
+  return {
+    TableName: tableName,
+    Key: { orderId },
+    UpdateExpression: "SET ticketIds = if_not_exists(ticketIds, :ticketIds)",
+    ConditionExpression: "attribute_exists(orderId)",
+    ExpressionAttributeValues: {
+      ":ticketIds": ticketIds,
+    },
+  };
+}
+
+/**
+ * PENDING → CONFIRMED. Idempotent if already CONFIRMED.
+ * Optionally fills executionArn when still missing.
+ */
+export function buildMarkConfirmedUpdateInput(params: MarkConfirmedUpdateParams) {
+  const { tableName, orderId, executionArn } = params;
+
+  const expressionNames = { "#status": "status" };
+  const expressionValues: Record<string, string> = {
+    ":confirmed": "CONFIRMED",
+    ":pending": "PENDING",
+  };
+
+  let updateExpression = "SET #status = :confirmed";
+  if (executionArn) {
+    updateExpression +=
+      ", executionArn = if_not_exists(executionArn, :executionArn)";
+    expressionValues[":executionArn"] = executionArn;
+  }
+
+  return {
+    TableName: tableName,
+    Key: { orderId },
+    UpdateExpression: updateExpression,
+    ConditionExpression:
+      "attribute_exists(orderId) AND (#status = :pending OR #status = :confirmed)",
+    ExpressionAttributeNames: expressionNames,
+    ExpressionAttributeValues: expressionValues,
+  };
+}
+
 /** Compute payUntil ISO string from a reference time (defaults to Date.now()). */
 export function payUntilAt(
   nowMs: number = Date.now(),

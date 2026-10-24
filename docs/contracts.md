@@ -201,6 +201,7 @@ Table name: `gatehold-{stage}-orders`
 | `idempotencyKey` | string | Same client `Idempotency-Key` |
 | `createdAt` | string | ISO-8601 |
 | `amount` | number | Optional until payment |
+| `ticketIds` | string[] | Optional; Phase 6 stub `tkt:{orderId}:{seatId}` until Phase 9 |
 | `executionArn` | string | Optional until saga |
 | `failReason` | string | Optional debugging |
 
@@ -496,6 +497,31 @@ After seats are `SOLD`, take the money:
 
 ASL: retry `TransientError` only. Do **not** retry `CapturePaymentError`.
 
+### IssueTicket (saga Task — stub)
+
+Phase 6 writes **placeholder** ticket ids only (no KMS/S3 — Phase 9).
+
+1. For each `seatId`, build deterministic id `tkt:{orderId}:{seatId}`.
+2. `SET ticketIds = if_not_exists(ticketIds, :ticketIds)` on the order (`attribute_exists(orderId)`).
+3. Return saga state plus `ticketIds`.
+
+ASL: retry `TransientError` only. Do **not** retry `IssueTicketError`.
+
+### MarkConfirmed (saga Task)
+
+Terminal happy-path write:
+
+```
+Update order
+  SET #status = CONFIRMED
+  CONDITION attribute_exists(orderId)
+    AND (#status = PENDING OR #status = CONFIRMED)
+```
+
+Idempotent if already `CONFIRMED`. Requires `ticketIds` from IssueTicket. Passes saga state through; ASL then `Succeed`.
+
+ASL: retry `TransientError` only. Do **not** retry `MarkConfirmedError`.
+
 ### LockSeatForPayment in the saga
 
 Phase 4 accept already runs `HELD → PAYING` and sets `orderId` + `payUntil` (see Create-order transaction above).
@@ -553,7 +579,7 @@ Never update a ledger row in place. New money outcome = new `pk` / new row (e.g.
 
 ### Shared types
 
-Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga input) in `services/shared/src/types.ts`.
+Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga input), `AuthorizedSagaState`, `TicketedSagaState` in `services/shared/src/types.ts`.
 
 ## TODO (later phases)
 

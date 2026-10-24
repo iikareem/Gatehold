@@ -6,7 +6,9 @@ import {
   buildConfirmSeatUpdateInput,
   buildConfirmSeatsTransactWriteInput,
   buildCreateOrderTransactWriteInput,
+  buildIssueTicketsUpdateInput,
   buildLockSeatForPaymentUpdateInput,
+  buildMarkConfirmedUpdateInput,
   idempotencyTtlEpoch,
   payUntilAt,
 } from "./order";
@@ -149,6 +151,51 @@ describe("buildConfirmSeatsTransactWriteInput", () => {
     assert.equal(
       input.TransactItems[0]?.Update?.Key?.seatId,
       "A-12-07",
+    );
+  });
+});
+
+describe("buildIssueTicketsUpdateInput", () => {
+  it("sets ticketIds only if missing", () => {
+    const input = buildIssueTicketsUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+      ticketIds: ["tkt:ord_1:A-12-07"],
+    });
+    assert.equal(
+      input.UpdateExpression,
+      "SET ticketIds = if_not_exists(ticketIds, :ticketIds)",
+    );
+    assert.equal(input.ConditionExpression, "attribute_exists(orderId)");
+    assert.deepEqual(input.ExpressionAttributeValues[":ticketIds"], [
+      "tkt:ord_1:A-12-07",
+    ]);
+  });
+});
+
+describe("buildMarkConfirmedUpdateInput", () => {
+  it("moves PENDING or CONFIRMED to CONFIRMED", () => {
+    const input = buildMarkConfirmedUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+    });
+    assert.equal(input.UpdateExpression, "SET #status = :confirmed");
+    assert.match(
+      input.ConditionExpression,
+      /#status = :pending OR #status = :confirmed/,
+    );
+    assert.equal(input.ExpressionAttributeValues[":confirmed"], "CONFIRMED");
+  });
+
+  it("optionally fills executionArn when missing", () => {
+    const input = buildMarkConfirmedUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+      executionArn: "arn:aws:states:…:execution:ord_1",
+    });
+    assert.match(
+      input.UpdateExpression,
+      /executionArn = if_not_exists\(executionArn, :executionArn\)/,
     );
   });
 });

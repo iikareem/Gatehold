@@ -7,6 +7,8 @@ import {
   paymentCaptureKey,
   paymentRefundKey,
   paymentVoidKey,
+  placeholderTicketId,
+  placeholderTicketIds,
 } from "./types";
 
 describe("payment idempotency keys", () => {
@@ -15,6 +17,16 @@ describe("payment idempotency keys", () => {
     assert.equal(paymentCaptureKey("ord_1"), "pay:capture:ord_1");
     assert.equal(paymentVoidKey("ord_1"), "pay:void:ord_1");
     assert.equal(paymentRefundKey("ord_1"), "pay:refund:ord_1");
+  });
+});
+
+describe("placeholder ticket ids", () => {
+  it("are deterministic per order and seat", () => {
+    assert.equal(placeholderTicketId("ord_1", "A-12-07"), "tkt:ord_1:A-12-07");
+    assert.deepEqual(placeholderTicketIds("ord_1", ["A-12-07", "A-12-08"]), [
+      "tkt:ord_1:A-12-07",
+      "tkt:ord_1:A-12-08",
+    ]);
   });
 });
 

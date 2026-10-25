@@ -288,6 +288,106 @@ export function buildMarkConfirmedUpdateInput(params: MarkConfirmedUpdateParams)
   };
 }
 
+export interface ReleaseSeatUpdateParams {
+  tableName: string;
+  eventId: string;
+  seatId: string;
+  holdId: string;
+  orderId: string;
+}
+
+export interface ReleaseSeatsTransactParams {
+  seatsTableName: string;
+  eventId: string;
+  holdId: string;
+  orderId: string;
+  seatIds: string[];
+}
+
+export interface MarkFailedUpdateParams {
+  tableName: string;
+  orderId: string;
+  /** Optional debugging reason from Catch Error/Cause. */
+  failReason?: string;
+}
+
+/**
+ * Builds Update input for PAYING → AVAILABLE under a specific hold/order.
+ * Clears payment-lock fields. Idempotent if already AVAILABLE.
+ */
+export function buildReleaseSeatUpdateInput(params: ReleaseSeatUpdateParams) {
+  const { tableName, eventId, seatId, holdId, orderId } = params;
+
+  return {
+    TableName: tableName,
+    Key: { eventId, seatId },
+    UpdateExpression:
+      "SET #status = :available REMOVE holdId, holdOwner, expiresAt, orderId, payUntil",
+    ConditionExpression:
+      "(#status = :paying AND holdId = :holdId AND orderId = :orderId) OR #status = :available",
+    ExpressionAttributeNames: {
+      "#status": "status",
+    },
+    ExpressionAttributeValues: {
+      ":available": "AVAILABLE",
+      ":paying": "PAYING",
+      ":holdId": holdId,
+      ":orderId": orderId,
+    },
+  };
+}
+
+/**
+ * All seats PAYING→AVAILABLE in one TransactWrite (all-or-nothing).
+ */
+export function buildReleaseSeatsTransactWriteInput(
+  params: ReleaseSeatsTransactParams,
+) {
+  const { seatsTableName, eventId, holdId, orderId, seatIds } = params;
+
+  return {
+    TransactItems: seatIds.map((seatId) => ({
+      Update: buildReleaseSeatUpdateInput({
+        tableName: seatsTableName,
+        eventId,
+        seatId,
+        holdId,
+        orderId,
+      }),
+    })),
+  };
+}
+
+/**
+ * PENDING → FAILED. Idempotent if already FAILED.
+ * Optionally sets failReason when provided.
+ */
+export function buildMarkFailedUpdateInput(params: MarkFailedUpdateParams) {
+  const { tableName, orderId, failReason } = params;
+
+  const expressionNames = { "#status": "status" };
+  const expressionValues: Record<string, string> = {
+    ":failed": "FAILED",
+    ":pending": "PENDING",
+  };
+
+  let updateExpression = "SET #status = :failed";
+  if (failReason) {
+    updateExpression += ", failReason = :failReason";
+    expressionValues[":failReason"] = failReason;
+  }
+
+  return {
+    TableName: tableName,
+    Key: { orderId },
+    UpdateExpression: updateExpression,
+    ConditionExpression:
+      "attribute_exists(orderId) AND (#status = :pending OR #status = :failed)",
+    ExpressionAttributeNames: expressionNames,
+    ExpressionAttributeValues: expressionValues,
+  };
+}
+
 /** Compute payUntil ISO string from a reference time (defaults to Date.now()). */
 export function payUntilAt(
   nowMs: number = Date.now(),

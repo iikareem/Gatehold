@@ -9,6 +9,9 @@ import {
   buildIssueTicketsUpdateInput,
   buildLockSeatForPaymentUpdateInput,
   buildMarkConfirmedUpdateInput,
+  buildMarkFailedUpdateInput,
+  buildReleaseSeatUpdateInput,
+  buildReleaseSeatsTransactWriteInput,
   idempotencyTtlEpoch,
   payUntilAt,
 } from "./order";
@@ -71,7 +74,15 @@ describe("buildCreateOrderTransactWriteInput", () => {
   });
 
   it("claims idempotency first with attribute_not_exists", () => {
-    const put = input.TransactItems[0].Put;
+    const put = (input.TransactItems[0] as { Put?: Record<string, unknown> })
+      .Put as
+      | {
+          TableName?: string;
+          Item?: Record<string, unknown>;
+          ConditionExpression?: string;
+          ExpressionAttributeNames?: Record<string, string>;
+        }
+      | undefined;
     assert.equal(put?.TableName, "gatehold-dev-idempotency");
     assert.deepEqual(put?.Item, {
       key: "idem-1",
@@ -84,7 +95,16 @@ describe("buildCreateOrderTransactWriteInput", () => {
   });
 
   it("checks event is ON_SALE", () => {
-    const check = input.TransactItems[1].ConditionCheck;
+    const check = (
+      input.TransactItems[1] as {
+        ConditionCheck?: {
+          TableName?: string;
+          Key?: Record<string, string>;
+          ConditionExpression?: string;
+          ExpressionAttributeValues?: Record<string, string>;
+        };
+      }
+    ).ConditionCheck;
     assert.equal(check?.TableName, "gatehold-dev-events");
     assert.deepEqual(check?.Key, { eventId: "evt_001" });
     assert.equal(check?.ConditionExpression, "#status = :onSale");
@@ -93,20 +113,36 @@ describe("buildCreateOrderTransactWriteInput", () => {
 
   it("locks each seat then puts PENDING order", () => {
     assert.equal(input.TransactItems.length, 5); // idem + event + 2 seats + order
-    assert.deepEqual(input.TransactItems[2].Update?.Key, {
+    const seat0 = (
+      input.TransactItems[2] as {
+        Update?: {
+          Key?: Record<string, string>;
+          ExpressionAttributeValues?: Record<string, string>;
+        };
+      }
+    ).Update;
+    const seat1 = (
+      input.TransactItems[3] as { Update?: { Key?: Record<string, string> } }
+    ).Update;
+    assert.deepEqual(seat0?.Key, {
       eventId: "evt_001",
       seatId: "A-12-10",
     });
-    assert.deepEqual(input.TransactItems[3].Update?.Key, {
+    assert.deepEqual(seat1?.Key, {
       eventId: "evt_001",
       seatId: "A-12-11",
     });
-    assert.equal(
-      input.TransactItems[2].Update?.ExpressionAttributeValues?.[":holdOwner"],
-      "alice",
-    );
+    assert.equal(seat0?.ExpressionAttributeValues?.[":holdOwner"], "alice");
 
-    const orderPut = input.TransactItems[4].Put;
+    const orderPut = (
+      input.TransactItems[4] as {
+        Put?: {
+          TableName?: string;
+          Item?: Record<string, unknown>;
+          ConditionExpression?: string;
+        };
+      }
+    ).Put;
     assert.equal(orderPut?.TableName, "gatehold-dev-orders");
     assert.equal(orderPut?.Item?.status, "PENDING");
     assert.deepEqual(orderPut?.Item?.seatIds, ["A-12-10", "A-12-11"]);
@@ -196,6 +232,78 @@ describe("buildMarkConfirmedUpdateInput", () => {
     assert.match(
       input.UpdateExpression,
       /executionArn = if_not_exists\(executionArn, :executionArn\)/,
+    );
+  });
+});
+
+describe("buildReleaseSeatUpdateInput", () => {
+  const input = buildReleaseSeatUpdateInput({
+    tableName: "gatehold-dev-seats",
+    eventId: "evt_001",
+    seatId: "A-12-07",
+    holdId: "h_1",
+    orderId: "ord_1",
+  });
+
+  it("sets AVAILABLE and clears hold/payment fields", () => {
+    assert.equal(input.ExpressionAttributeValues[":available"], "AVAILABLE");
+    assert.equal(input.ExpressionAttributeValues[":paying"], "PAYING");
+    assert.match(input.UpdateExpression, /SET #status = :available/);
+    assert.match(
+      input.UpdateExpression,
+      /REMOVE holdId, holdOwner, expiresAt, orderId, payUntil/,
+    );
+  });
+
+  it("allows PAYING for this hold/order or already AVAILABLE", () => {
+    assert.match(
+      input.ConditionExpression,
+      /\(#status = :paying AND holdId = :holdId AND orderId = :orderId\) OR #status = :available/,
+    );
+  });
+});
+
+describe("buildReleaseSeatsTransactWriteInput", () => {
+  it("one Update per seat", () => {
+    const input = buildReleaseSeatsTransactWriteInput({
+      seatsTableName: "gatehold-dev-seats",
+      eventId: "evt_001",
+      holdId: "h_1",
+      orderId: "ord_1",
+      seatIds: ["A-12-07", "A-12-08"],
+    });
+    assert.equal(input.TransactItems.length, 2);
+    assert.equal(
+      input.TransactItems[0]?.Update?.Key?.seatId,
+      "A-12-07",
+    );
+  });
+});
+
+describe("buildMarkFailedUpdateInput", () => {
+  it("moves PENDING or FAILED to FAILED", () => {
+    const input = buildMarkFailedUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+    });
+    assert.equal(input.UpdateExpression, "SET #status = :failed");
+    assert.match(
+      input.ConditionExpression,
+      /#status = :pending OR #status = :failed/,
+    );
+    assert.equal(input.ExpressionAttributeValues[":failed"], "FAILED");
+  });
+
+  it("optionally sets failReason", () => {
+    const input = buildMarkFailedUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+      failReason: "AuthorizePaymentError",
+    });
+    assert.match(input.UpdateExpression, /failReason = :failReason/);
+    assert.equal(
+      input.ExpressionAttributeValues[":failReason"],
+      "AuthorizePaymentError",
     );
   });
 });

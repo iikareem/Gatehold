@@ -47,6 +47,9 @@ export {
   buildConfirmSeatsTransactWriteInput,
   buildIssueTicketsUpdateInput,
   buildMarkConfirmedUpdateInput,
+  buildReleaseSeatUpdateInput,
+  buildReleaseSeatsTransactWriteInput,
+  buildMarkFailedUpdateInput,
   payUntilAt,
   idempotencyTtlEpoch,
   type LockSeatForPaymentParams,
@@ -55,6 +58,9 @@ export {
   type ConfirmSeatsTransactParams,
   type IssueTicketsUpdateParams,
   type MarkConfirmedUpdateParams,
+  type ReleaseSeatUpdateParams,
+  type ReleaseSeatsTransactParams,
+  type MarkFailedUpdateParams,
 } from "./order";
 export {
   buildAppendLedgerPutInput,

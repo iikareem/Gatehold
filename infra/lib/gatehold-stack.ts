@@ -178,7 +178,8 @@ export class GateholdStack extends cdk.Stack {
     // Phase 6 happy path:
     // VerifyHold → AuthorizePayment → ConfirmSeat → CapturePayment
     // → IssueTicket → MarkConfirmed → Succeed
-    // (Slice 3 LockSeat assert still pending).
+    // AuthorizePayment Catch → ReleaseSeat → MarkFailed → SagaCompensated
+    // (Slice 3 LockSeat assert still pending; void path later).
     const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
       functionName: `gatehold-${stage}-verify-hold`,
       entry: path.join(
@@ -285,6 +286,74 @@ export class GateholdStack extends cdk.Stack {
       interval: cdk.Duration.seconds(2),
       maxAttempts: 3,
       backoffRate: 2,
+    });
+
+    const releaseSeatFn = new NodejsFunction(this, "ReleaseSeatFn", {
+      functionName: `gatehold-${stage}-release-seat`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-steps/src/release-seat.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: lambdaEnv,
+      bundling,
+      projectRoot,
+    });
+
+    const markFailedFn = new NodejsFunction(this, "MarkFailedFn", {
+      functionName: `gatehold-${stage}-mark-failed`,
+      entry: path.join(
+        __dirname,
+        "../../services/saga-steps/src/mark-failed.ts",
+      ),
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+      },
+      bundling,
+      projectRoot,
+    });
+
+    const releaseSeatTask = new tasks.LambdaInvoke(this, "ReleaseSeat", {
+      lambdaFunction: releaseSeatFn,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    releaseSeatTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
+    const markFailedTask = new tasks.LambdaInvoke(this, "MarkFailed", {
+      lambdaFunction: markFailedFn,
+      outputPath: "$.Payload",
+      retryOnServiceExceptions: true,
+    });
+    markFailedTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
+    const sagaCompensated = new sfn.Succeed(this, "SagaCompensated");
+    const authFailCompensation = releaseSeatTask
+      .next(markFailedTask)
+      .next(sagaCompensated);
+
+    // Auth never succeeded → no void; free seats + mark order FAILED.
+    authorizePaymentTask.addCatch(authFailCompensation, {
+      errors: ["States.ALL"],
+      resultPath: "$.error",
     });
 
     const confirmSeatTask = new tasks.LambdaInvoke(this, "ConfirmSeat", {
@@ -431,11 +500,13 @@ export class GateholdStack extends cdk.Stack {
     ordersTable.grantReadWriteData(authorizePaymentFn);
 
     seatsTable.grantReadWriteData(confirmSeatFn);
+    seatsTable.grantReadWriteData(releaseSeatFn);
 
     ledgerTable.grantReadWriteData(capturePaymentFn);
 
     ordersTable.grantReadWriteData(issueTicketFn);
     ordersTable.grantReadWriteData(markConfirmedFn);
+    ordersTable.grantReadWriteData(markFailedFn);
 
     // Timer only (not the Phase 7 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {
@@ -530,6 +601,12 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "MarkConfirmedFunctionName", {
       value: markConfirmedFn.functionName,
+    });
+    new cdk.CfnOutput(this, "ReleaseSeatFunctionName", {
+      value: releaseSeatFn.functionName,
+    });
+    new cdk.CfnOutput(this, "MarkFailedFunctionName", {
+      value: markFailedFn.functionName,
     });
     new cdk.CfnOutput(this, "MockPaymentUrl", {
       value: mockPaymentUrl,

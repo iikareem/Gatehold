@@ -53,7 +53,7 @@ services:
       - AWS_REGION=us-east-1
       - AWS_DEFAULT_REGION=us-east-1
       # Faster startup: only probe services we use locally
-      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,apigateway,iam
+      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,apigateway,iam,stepfunctions,logs
     depends_on:
       ministack:
         condition: service_healthy

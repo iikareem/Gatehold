@@ -522,6 +522,44 @@ Idempotent if already `CONFIRMED`. Requires `ticketIds` from IssueTicket. Passes
 
 ASL: retry `TransientError` only. Do **not** retry `MarkConfirmedError`.
 
+### ReleaseSeat (saga Task — compensation)
+
+Compensation after AuthorizePayment fails (no void — auth never succeeded). Free inventory for this hold/order:
+
+```
+TransactWrite all seatIds
+  SET #status = AVAILABLE
+  REMOVE holdId, holdOwner, expiresAt, orderId, payUntil
+  CONDITION (#status = PAYING AND holdId = :h AND orderId = :o)
+    OR #status = AVAILABLE
+```
+
+- Auth-fail path: seats are still `PAYING`.
+- `AVAILABLE` allowed for idempotent retry (fields already cleared).
+- Do **not** release `SOLD` here — that belongs with VoidAuthorization after ConfirmSeat.
+- Passes saga state through (keeps Catch `$.error` for MarkFailed).
+
+ASL: retry `TransientError` only. Do **not** retry `ReleaseSeatError`.
+
+### MarkFailed (saga Task — compensation)
+
+Terminal failure write after ReleaseSeat:
+
+```
+Update order
+  SET #status = FAILED[, failReason = :r]
+  CONDITION attribute_exists(orderId)
+    AND (#status = PENDING OR #status = FAILED)
+```
+
+Optional `failReason` from Catch `$.error.Error` / `Cause` (truncated). Idempotent if already `FAILED`. ASL then `Succeed` (`SagaCompensated`).
+
+ASL: retry `TransientError` only. Do **not** retry `MarkFailedError`.
+
+### AuthorizePayment Catch (no void)
+
+On AuthorizePayment Task failure (after retries): Catch with `resultPath: $.error` → ReleaseSeat → MarkFailed → `SagaCompensated`. Preserves saga input (`orderId` / `eventId` / `holdId` / `seatIds`) so compensation can read it.
+
 ### LockSeatForPayment in the saga
 
 Phase 4 accept already runs `HELD → PAYING` and sets `orderId` + `payUntil` (see Create-order transaction above).
@@ -583,7 +621,7 @@ Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga i
 
 ## TODO (later phases)
 
-- Conditional write expressions for payment release / compensation — ConfirmSeat (`PAYING→SOLD`) is in saga; release path later
+- VoidAuthorization → ReleaseSeat (include `SOLD`) → MarkFailed after auth succeeds
 - SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

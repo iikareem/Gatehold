@@ -62,6 +62,18 @@ export async function captureWithProvider(
   return postPayment(baseUrl, "/v1/payments/capture", body, "capture", fetchFn);
 }
 
+/**
+ * POST /v1/payments/void — cancel AUTHORIZED funds (no money moved).
+ * Key: pay:void:{orderId}.
+ */
+export async function voidWithProvider(
+  baseUrl: string,
+  body: FollowUpPaymentRequest,
+  fetchFn: typeof fetch = fetch,
+): Promise<PaymentProviderResponse> {
+  return postPayment(baseUrl, "/v1/payments/void", body, "void", fetchFn);
+}
+
 async function postPayment(
   baseUrl: string,
   path: string,

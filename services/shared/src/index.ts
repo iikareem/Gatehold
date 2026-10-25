@@ -72,6 +72,7 @@ export {
 export {
   authorizeWithProvider,
   captureWithProvider,
+  voidWithProvider,
   isRetryablePaymentStatus,
   PaymentProviderError,
   type AuthorizePaymentRequest,

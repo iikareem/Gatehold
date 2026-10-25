@@ -179,7 +179,8 @@ export class GateholdStack extends cdk.Stack {
     // VerifyHold → AuthorizePayment → ConfirmSeat → CapturePayment
     // → IssueTicket → MarkConfirmed → Succeed
     // AuthorizePayment Catch → ReleaseSeat → MarkFailed → SagaCompensated
-    // (Slice 3 LockSeat assert still pending; void path later).
+    // ConfirmSeat Catch → VoidAuthorization → (same) ReleaseSeat → …
+    // (Slice 3 LockSeat assert still pending).
     const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
       functionName: `gatehold-${stage}-verify-hold`,
       entry: path.join(
@@ -346,15 +347,59 @@ export class GateholdStack extends cdk.Stack {
     });
 
     const sagaCompensated = new sfn.Succeed(this, "SagaCompensated");
-    const authFailCompensation = releaseSeatTask
+    // Shared compensation tail (one ReleaseSeat / MarkFailed graph).
+    const releaseThenFail = releaseSeatTask
       .next(markFailedTask)
       .next(sagaCompensated);
 
     // Auth never succeeded → no void; free seats + mark order FAILED.
-    authorizePaymentTask.addCatch(authFailCompensation, {
+    authorizePaymentTask.addCatch(releaseThenFail, {
       errors: ["States.ALL"],
       resultPath: "$.error",
     });
+
+    const voidAuthorizationFn = new NodejsFunction(
+      this,
+      "VoidAuthorizationFn",
+      {
+        functionName: `gatehold-${stage}-void-authorization`,
+        entry: path.join(
+          __dirname,
+          "../../services/saga-steps/src/void-authorization.ts",
+        ),
+        handler: "handler",
+        runtime: lambda.Runtime.NODEJS_22_X,
+        timeout: cdk.Duration.seconds(15),
+        memorySize: 256,
+        environment: {
+          ...lambdaEnv,
+          LEDGER_TABLE_NAME: ledgerTable.tableName,
+          MOCK_PAYMENT_URL: mockPaymentUrl,
+        },
+        bundling,
+        projectRoot,
+      },
+    );
+
+    const voidAuthorizationTask = new tasks.LambdaInvoke(
+      this,
+      "VoidAuthorization",
+      {
+        lambdaFunction: voidAuthorizationFn,
+        outputPath: "$.Payload",
+        retryOnServiceExceptions: true,
+      },
+    );
+    voidAuthorizationTask.addRetry({
+      errors: ["TransientError"],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
+    // Auth succeeded, ConfirmSeat failed → void first, then same tail.
+    const confirmFailCompensation =
+      voidAuthorizationTask.next(releaseSeatTask);
 
     const confirmSeatTask = new tasks.LambdaInvoke(this, "ConfirmSeat", {
       lambdaFunction: confirmSeatFn,
@@ -366,6 +411,10 @@ export class GateholdStack extends cdk.Stack {
       interval: cdk.Duration.seconds(2),
       maxAttempts: 3,
       backoffRate: 2,
+    });
+    confirmSeatTask.addCatch(confirmFailCompensation, {
+      errors: ["States.ALL"],
+      resultPath: "$.error",
     });
 
     const capturePaymentTask = new tasks.LambdaInvoke(this, "CapturePayment", {
@@ -503,6 +552,7 @@ export class GateholdStack extends cdk.Stack {
     seatsTable.grantReadWriteData(releaseSeatFn);
 
     ledgerTable.grantReadWriteData(capturePaymentFn);
+    ledgerTable.grantReadWriteData(voidAuthorizationFn);
 
     ordersTable.grantReadWriteData(issueTicketFn);
     ordersTable.grantReadWriteData(markConfirmedFn);
@@ -607,6 +657,9 @@ export class GateholdStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "MarkFailedFunctionName", {
       value: markFailedFn.functionName,
+    });
+    new cdk.CfnOutput(this, "VoidAuthorizationFunctionName", {
+      value: voidAuthorizationFn.functionName,
     });
     new cdk.CfnOutput(this, "MockPaymentUrl", {
       value: mockPaymentUrl,

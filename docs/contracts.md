@@ -541,14 +541,14 @@ Shared compensation tail. Free inventory for this hold/order:
 TransactWrite all seatIds
   SET #status = AVAILABLE
   REMOVE holdId, holdOwner, expiresAt, orderId, payUntil
-  CONDITION (#status = PAYING AND holdId = :h AND orderId = :o)
+  CONDITION ((#status = PAYING OR #status = SOLD) AND holdId = :h AND orderId = :o)
     OR #status = AVAILABLE
 ```
 
-- Auth-fail and ConfirmSeat-fail paths: seats are still `PAYING` (ConfirmSeat is all-or-nothing).
+- Auth-fail / ConfirmSeat-fail: seats still `PAYING`.
+- CapturePayment-fail (after ConfirmSeat): seats already `SOLD`.
 - `AVAILABLE` allowed for idempotent retry (fields already cleared).
-- Do **not** release `SOLD` here yet — that belongs with later Capture/refund compensation.
-- Passes saga state through (keeps Catch `$.error` for MarkFailed).
+- Passes saga state through (keeps Catch `$.error` for MarkFailed / MarkRefunded).
 
 ASL: retry `TransientError` only. Do **not** retry `ReleaseSeatError`.
 
@@ -573,7 +573,11 @@ On AuthorizePayment Task failure (after retries): Catch with `resultPath: $.erro
 
 ### ConfirmSeat Catch (void then shared tail)
 
-On ConfirmSeat Task failure (after retries): Catch with `resultPath: $.error` → VoidAuthorization → **same** ReleaseSeat → MarkFailed → `SagaCompensated`. Input to Catch is AuthorizePayment output (`authorizationId` / amount / seats) plus `$.error`.
+On ConfirmSeat Task failure (after retries): Catch with `resultPath: $.error` → VoidAuthorization → **same** ReleaseSeat → MarkFailed → `SagaCompensated`. Input to Catch is AuthorizePayment output (`authorizationId` / amount / seats) plus `$.error`. Seats still `PAYING`.
+
+### CapturePayment Catch (same void tail)
+
+On CapturePayment Task failure (after retries): Catch with `resultPath: $.error` → **same** VoidAuthorization → ReleaseSeat → MarkFailed → `SagaCompensated`. Money was never captured (prefer void over refund). Seats are already `SOLD`; ReleaseSeat allows `SOLD`. Input is ConfirmSeat output (`authorizationId` / amount / seats) plus `$.error`.
 
 ### LockSeatForPayment in the saga
 
@@ -636,7 +640,7 @@ Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga i
 
 ## TODO (later phases)
 
-- Capture/post-SOLD failure: RefundPayment → ReleaseSeat (include `SOLD`) → MarkRefunded / MarkFailed
+- After capture succeeds (IssueTicket / MarkConfirmed fail): RefundPayment → ReleaseSeat → MarkRefunded
 - SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

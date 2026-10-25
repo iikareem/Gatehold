@@ -179,8 +179,8 @@ export class GateholdStack extends cdk.Stack {
     // VerifyHold → AuthorizePayment → ConfirmSeat → CapturePayment
     // → IssueTicket → MarkConfirmed → Succeed
     // AuthorizePayment Catch → ReleaseSeat → MarkFailed → SagaCompensated
-    // ConfirmSeat Catch → VoidAuthorization → (same) ReleaseSeat → …
-    // (Slice 3 LockSeat assert still pending).
+    // ConfirmSeat / CapturePayment Catch → VoidAuthorization → (same) ReleaseSeat → …
+    // (Slice 3 LockSeat assert still pending; refund path after capture later).
     const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
       functionName: `gatehold-${stage}-verify-hold`,
       entry: path.join(
@@ -397,9 +397,9 @@ export class GateholdStack extends cdk.Stack {
       backoffRate: 2,
     });
 
-    // Auth succeeded, ConfirmSeat failed → void first, then same tail.
-    const confirmFailCompensation =
-      voidAuthorizationTask.next(releaseSeatTask);
+    // Auth succeeded but ConfirmSeat or Capture failed → void first, then same tail.
+    // Capture never took money; seats may be PAYING (confirm fail) or SOLD (capture fail).
+    const voidThenRelease = voidAuthorizationTask.next(releaseSeatTask);
 
     const confirmSeatTask = new tasks.LambdaInvoke(this, "ConfirmSeat", {
       lambdaFunction: confirmSeatFn,
@@ -412,7 +412,7 @@ export class GateholdStack extends cdk.Stack {
       maxAttempts: 3,
       backoffRate: 2,
     });
-    confirmSeatTask.addCatch(confirmFailCompensation, {
+    confirmSeatTask.addCatch(voidThenRelease, {
       errors: ["States.ALL"],
       resultPath: "$.error",
     });
@@ -427,6 +427,10 @@ export class GateholdStack extends cdk.Stack {
       interval: cdk.Duration.seconds(2),
       maxAttempts: 3,
       backoffRate: 2,
+    });
+    capturePaymentTask.addCatch(voidThenRelease, {
+      errors: ["States.ALL"],
+      resultPath: "$.error",
     });
 
     const issueTicketFn = new NodejsFunction(this, "IssueTicketFn", {

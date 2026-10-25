@@ -255,10 +255,11 @@ describe("buildReleaseSeatUpdateInput", () => {
     );
   });
 
-  it("allows PAYING for this hold/order or already AVAILABLE", () => {
+  it("allows PAYING or SOLD for this hold/order or already AVAILABLE", () => {
+    assert.equal(input.ExpressionAttributeValues[":sold"], "SOLD");
     assert.match(
       input.ConditionExpression,
-      /\(#status = :paying AND holdId = :holdId AND orderId = :orderId\) OR #status = :available/,
+      /\(\(#status = :paying OR #status = :sold\) AND holdId = :holdId AND orderId = :orderId\) OR #status = :available/,
     );
   });
 });

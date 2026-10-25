@@ -312,8 +312,9 @@ export interface MarkFailedUpdateParams {
 }
 
 /**
- * Builds Update input for PAYING → AVAILABLE under a specific hold/order.
+ * Builds Update input for PAYING/SOLD → AVAILABLE under a specific hold/order.
  * Clears payment-lock fields. Idempotent if already AVAILABLE.
+ * SOLD path is needed when ConfirmSeat succeeded but Capture (or later) fails.
  */
 export function buildReleaseSeatUpdateInput(params: ReleaseSeatUpdateParams) {
   const { tableName, eventId, seatId, holdId, orderId } = params;
@@ -324,13 +325,14 @@ export function buildReleaseSeatUpdateInput(params: ReleaseSeatUpdateParams) {
     UpdateExpression:
       "SET #status = :available REMOVE holdId, holdOwner, expiresAt, orderId, payUntil",
     ConditionExpression:
-      "(#status = :paying AND holdId = :holdId AND orderId = :orderId) OR #status = :available",
+      "((#status = :paying OR #status = :sold) AND holdId = :holdId AND orderId = :orderId) OR #status = :available",
     ExpressionAttributeNames: {
       "#status": "status",
     },
     ExpressionAttributeValues: {
       ":available": "AVAILABLE",
       ":paying": "PAYING",
+      ":sold": "SOLD",
       ":holdId": holdId,
       ":orderId": orderId,
     },
@@ -338,7 +340,7 @@ export function buildReleaseSeatUpdateInput(params: ReleaseSeatUpdateParams) {
 }
 
 /**
- * All seats PAYING→AVAILABLE in one TransactWrite (all-or-nothing).
+ * All seats PAYING/SOLD→AVAILABLE in one TransactWrite (all-or-nothing).
  */
 export function buildReleaseSeatsTransactWriteInput(
   params: ReleaseSeatsTransactParams,

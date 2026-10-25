@@ -36,7 +36,7 @@ export class TransientError extends Error {
 
 /**
  * Phase 6 compensation — ReleaseSeat.
- * TransactWrite all order seats PAYING → AVAILABLE (same holdId + orderId).
+ * TransactWrite all order seats PAYING/SOLD → AVAILABLE (same holdId + orderId).
  * Idempotent if already AVAILABLE. Passes saga state through for MarkFailed.
  */
 export async function handler(
@@ -61,7 +61,7 @@ export async function handler(
   } catch (err) {
     if (isTransactionCanceled(err) || isConditionalCheckFailed(err)) {
       throw new ReleaseSeatError(
-        `release seat failed for order ${event.orderId}: seats not PAYING for this hold/order`,
+        `release seat failed for order ${event.orderId}: seats not PAYING/SOLD for this hold/order`,
       );
     }
     if (isTransientDynamoError(err)) {

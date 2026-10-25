@@ -1,7 +1,7 @@
 /**
  * Purchase saga step Lambdas (Step Functions tasks).
  * Entry points live next to this file (e.g. verify-hold.ts).
- * Remaining: LockSeatForPayment, CheckPaymentStatus.
+ * Remaining (optional): LockSeatForPayment assert. CheckPaymentStatus skipped.
  */
 
 export { handler as verifyHold } from "./verify-hold";

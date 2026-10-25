@@ -1,7 +1,7 @@
 /**
  * Purchase saga step Lambdas (Step Functions tasks).
  * Entry points live next to this file (e.g. verify-hold.ts).
- * Remaining: LockSeatForPayment, CheckPaymentStatus, Refund compensation.
+ * Remaining: LockSeatForPayment, CheckPaymentStatus.
  */
 
 export { handler as verifyHold } from "./verify-hold";
@@ -13,3 +13,5 @@ export { handler as markConfirmed } from "./mark-confirmed";
 export { handler as releaseSeat } from "./release-seat";
 export { handler as markFailed } from "./mark-failed";
 export { handler as voidAuthorization } from "./void-authorization";
+export { handler as refundPayment } from "./refund-payment";
+export { handler as markRefunded } from "./mark-refunded";

@@ -10,6 +10,7 @@ import {
   buildLockSeatForPaymentUpdateInput,
   buildMarkConfirmedUpdateInput,
   buildMarkFailedUpdateInput,
+  buildMarkRefundedUpdateInput,
   buildReleaseSeatUpdateInput,
   buildReleaseSeatsTransactWriteInput,
   idempotencyTtlEpoch,
@@ -305,6 +306,34 @@ describe("buildMarkFailedUpdateInput", () => {
     assert.equal(
       input.ExpressionAttributeValues[":failReason"],
       "AuthorizePaymentError",
+    );
+  });
+});
+
+describe("buildMarkRefundedUpdateInput", () => {
+  it("moves PENDING or REFUNDED to REFUNDED", () => {
+    const input = buildMarkRefundedUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+    });
+    assert.equal(input.UpdateExpression, "SET #status = :refunded");
+    assert.match(
+      input.ConditionExpression,
+      /#status = :pending OR #status = :refunded/,
+    );
+    assert.equal(input.ExpressionAttributeValues[":refunded"], "REFUNDED");
+  });
+
+  it("optionally sets failReason", () => {
+    const input = buildMarkRefundedUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+      failReason: "IssueTicketError",
+    });
+    assert.match(input.UpdateExpression, /failReason = :failReason/);
+    assert.equal(
+      input.ExpressionAttributeValues[":failReason"],
+      "IssueTicketError",
     );
   });
 });

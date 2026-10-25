@@ -547,6 +547,7 @@ TransactWrite all seatIds
 
 - Auth-fail / ConfirmSeat-fail: seats still `PAYING`.
 - CapturePayment-fail (after ConfirmSeat): seats already `SOLD`.
+- IssueTicket / MarkConfirmed-fail (after Capture): seats already `SOLD`; refund path reuses the same ReleaseSeat Lambda.
 - `AVAILABLE` allowed for idempotent retry (fields already cleared).
 - Passes saga state through (keeps Catch `$.error` for MarkFailed / MarkRefunded).
 
@@ -567,6 +568,32 @@ Optional `failReason` from Catch `$.error.Error` / `Cause` (truncated). Idempote
 
 ASL: retry `TransientError` only. Do **not** retry `MarkFailedError`.
 
+### RefundPayment (saga Task — compensation)
+
+After CapturePayment succeeded but IssueTicket / MarkConfirmed failed: return the money.
+
+1. `POST {MOCK_PAYMENT_URL}/v1/payments/refund` with `idempotencyKey = pay:refund:{orderId}`, `authorizationId` from saga state, same amount/currency.
+2. On provider `REFUNDED`: append ledger `REFUND` with conditional Put `attribute_not_exists(pk)`.
+3. `ConditionalCheckFailed` → already recorded; treat as success.
+4. Pass saga state through (keeps Catch `$.error`) into ReleaseSeat → MarkRefunded.
+
+ASL: retry `TransientError` only. Do **not** retry `RefundPaymentError`.
+
+### MarkRefunded (saga Task — compensation)
+
+Terminal refund write after ReleaseSeat (post-capture compensation):
+
+```
+Update order
+  SET #status = REFUNDED[, failReason = :r]
+  CONDITION attribute_exists(orderId)
+    AND (#status = PENDING OR #status = REFUNDED)
+```
+
+Optional `failReason` from Catch `$.error.Error` / `Cause` (truncated). Idempotent if already `REFUNDED`. ASL then `Succeed` (`SagaCompensated`).
+
+ASL: retry `TransientError` only. Do **not** retry `MarkRefundedError`.
+
 ### AuthorizePayment Catch (no void)
 
 On AuthorizePayment Task failure (after retries): Catch with `resultPath: $.error` → ReleaseSeat → MarkFailed → `SagaCompensated`. Preserves saga input (`orderId` / `eventId` / `holdId` / `seatIds`) so compensation can read it.
@@ -578,6 +605,10 @@ On ConfirmSeat Task failure (after retries): Catch with `resultPath: $.error` �
 ### CapturePayment Catch (same void tail)
 
 On CapturePayment Task failure (after retries): Catch with `resultPath: $.error` → **same** VoidAuthorization → ReleaseSeat → MarkFailed → `SagaCompensated`. Money was never captured (prefer void over refund). Seats are already `SOLD`; ReleaseSeat allows `SOLD`. Input is ConfirmSeat output (`authorizationId` / amount / seats) plus `$.error`.
+
+### IssueTicket / MarkConfirmed Catch (refund then release)
+
+On IssueTicket or MarkConfirmed Task failure (after retries): Catch with `resultPath: $.error` → RefundPayment → ReleaseSeat → MarkRefunded → `SagaCompensated`. Money was already captured; seats are `SOLD`. Input is CapturePayment / IssueTicket output (`authorizationId` / amount / seats) plus `$.error`. Uses a separate ReleaseSeat ASL state (same Lambda) because the void path ends at MarkFailed.
 
 ### LockSeatForPayment in the saga
 
@@ -640,7 +671,6 @@ Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga i
 
 ## TODO (later phases)
 
-- After capture succeeds (IssueTicket / MarkConfirmed fail): RefundPayment → ReleaseSeat → MarkRefunded
 - SQS message shapes for refund jobs
 - EventBridge detail types (email, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

@@ -50,6 +50,7 @@ export {
   buildReleaseSeatUpdateInput,
   buildReleaseSeatsTransactWriteInput,
   buildMarkFailedUpdateInput,
+  buildMarkRefundedUpdateInput,
   payUntilAt,
   idempotencyTtlEpoch,
   type LockSeatForPaymentParams,
@@ -61,6 +62,7 @@ export {
   type ReleaseSeatUpdateParams,
   type ReleaseSeatsTransactParams,
   type MarkFailedUpdateParams,
+  type MarkRefundedUpdateParams,
 } from "./order";
 export {
   buildAppendLedgerPutInput,
@@ -73,6 +75,7 @@ export {
   authorizeWithProvider,
   captureWithProvider,
   voidWithProvider,
+  refundWithProvider,
   isRetryablePaymentStatus,
   PaymentProviderError,
   type AuthorizePaymentRequest,

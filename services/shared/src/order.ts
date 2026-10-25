@@ -390,6 +390,43 @@ export function buildMarkFailedUpdateInput(params: MarkFailedUpdateParams) {
   };
 }
 
+export interface MarkRefundedUpdateParams {
+  tableName: string;
+  orderId: string;
+  /** Optional debugging reason from Catch Error/Cause. */
+  failReason?: string;
+}
+
+/**
+ * PENDING → REFUNDED after post-capture compensation.
+ * Idempotent if already REFUNDED. Optionally sets failReason.
+ */
+export function buildMarkRefundedUpdateInput(params: MarkRefundedUpdateParams) {
+  const { tableName, orderId, failReason } = params;
+
+  const expressionNames = { "#status": "status" };
+  const expressionValues: Record<string, string> = {
+    ":refunded": "REFUNDED",
+    ":pending": "PENDING",
+  };
+
+  let updateExpression = "SET #status = :refunded";
+  if (failReason) {
+    updateExpression += ", failReason = :failReason";
+    expressionValues[":failReason"] = failReason;
+  }
+
+  return {
+    TableName: tableName,
+    Key: { orderId },
+    UpdateExpression: updateExpression,
+    ConditionExpression:
+      "attribute_exists(orderId) AND (#status = :pending OR #status = :refunded)",
+    ExpressionAttributeNames: expressionNames,
+    ExpressionAttributeValues: expressionValues,
+  };
+}
+
 /** Compute payUntil ISO string from a reference time (defaults to Date.now()). */
 export function payUntilAt(
   nowMs: number = Date.now(),

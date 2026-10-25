@@ -74,6 +74,18 @@ export async function voidWithProvider(
   return postPayment(baseUrl, "/v1/payments/void", body, "void", fetchFn);
 }
 
+/**
+ * POST /v1/payments/refund — return CAPTURED funds.
+ * Key: pay:refund:{orderId}.
+ */
+export async function refundWithProvider(
+  baseUrl: string,
+  body: FollowUpPaymentRequest,
+  fetchFn: typeof fetch = fetch,
+): Promise<PaymentProviderResponse> {
+  return postPayment(baseUrl, "/v1/payments/refund", body, "refund", fetchFn);
+}
+
 async function postPayment(
   baseUrl: string,
   path: string,

@@ -4,23 +4,30 @@ import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
-import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 import { Construct } from "constructs";
+import {
+  baseLambdaEnv,
+  createNodeFn,
+  dockerReachableEndpoint,
+  projectRoot,
+} from "./helpers/node-fn";
+import { createSagaTask } from "./helpers/saga-task";
 
 export interface GateholdStackProps extends cdk.StackProps {
   stage: string;
 }
 
 /**
- * Phase 0–6 (partial) stack: Events + Seats + Orders + Idempotency + Ledger,
+ * Phase 0–6 stack + Phase 7 Slice 0 helpers:
+ * Events + Seats + Orders + Idempotency + Ledger,
  * health + hold-seat + hold-sweeper + create-order, HTTP API,
  * EventBridge Scheduler → sweeper, order SQS (+ DLQ),
- * purchase saga (VerifyHold → Succeed) + saga-starter.
+ * purchase saga + saga-starter.
+ * Shared NodejsFunction / saga-task defaults live in helpers/.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -74,8 +81,7 @@ export class GateholdStack extends cdk.Stack {
       timeToLiveAttribute: "ttl",
     });
 
-    // Phase 6 Slice 1a: append-only payment ledger (pk = provider idempotency key).
-    // No writers yet — saga steps append AUTH/CAPTURE/VOID/REFUND in later slices.
+    // Phase 6: append-only payment ledger (pk = provider idempotency key).
     const ledgerTable = new dynamodb.Table(this, "LedgerTable", {
       tableName: `gatehold-${stage}-ledger`,
       partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
@@ -100,65 +106,35 @@ export class GateholdStack extends cdk.Stack {
       },
     });
 
-    // Lambdas run in Docker under MiniStack; localhost/127.0.0.1 is the
-    // container itself. Point SDKs at the emulator on the host.
-    const lambdaEnv: Record<string, string> = {
-      STAGE: stage,
-      EVENTS_TABLE_NAME: eventsTable.tableName,
-      SEATS_TABLE_NAME: seatsTable.tableName,
-      ...(process.env.AWS_ENDPOINT_URL
-        ? { AWS_ENDPOINT_URL: dockerReachableEndpoint(process.env.AWS_ENDPOINT_URL) }
-        : {}),
-    };
-
-    const bundling = {
-      minify: true,
-      sourceMap: true,
-      target: "node20",
-    };
-    const projectRoot = path.join(__dirname, "../..");
-
-    const healthFn = new NodejsFunction(this, "HealthFn", {
-      functionName: `gatehold-${stage}-health`,
-      entry: path.join(__dirname, "../../services/health/src/handler.ts"),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
-      environment: lambdaEnv,
-      bundling,
-      projectRoot,
+    const lambdaEnv = baseLambdaEnv(stage, {
+      eventsTableName: eventsTable.tableName,
+      seatsTableName: seatsTable.tableName,
     });
 
-    const holdSeatFn = new NodejsFunction(this, "HoldSeatFn", {
-      functionName: `gatehold-${stage}-hold-seat`,
-      entry: path.join(__dirname, "../../services/hold-seat/src/handler.ts"),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+    const healthFn = createNodeFn(this, "HealthFn", {
+      stage,
+      name: "health",
+      entry: path.join(projectRoot, "services/health/src/handler.ts"),
       environment: lambdaEnv,
-      bundling,
-      projectRoot,
     });
 
-    const createOrderEnv: Record<string, string> = {
-      ...lambdaEnv,
-      ORDERS_TABLE_NAME: ordersTable.tableName,
-      IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
-      ORDER_QUEUE_URL: orderQueue.queueUrl,
-    };
+    const holdSeatFn = createNodeFn(this, "HoldSeatFn", {
+      stage,
+      name: "hold-seat",
+      entry: path.join(projectRoot, "services/hold-seat/src/handler.ts"),
+      environment: lambdaEnv,
+    });
 
-    const createOrderFn = new NodejsFunction(this, "CreateOrderFn", {
-      functionName: `gatehold-${stage}-create-order`,
-      entry: path.join(__dirname, "../../services/create-order/src/handler.ts"),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
-      environment: createOrderEnv,
-      bundling,
-      projectRoot,
+    const createOrderFn = createNodeFn(this, "CreateOrderFn", {
+      stage,
+      name: "create-order",
+      entry: path.join(projectRoot, "services/create-order/src/handler.ts"),
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+        IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
+        ORDER_QUEUE_URL: orderQueue.queueUrl,
+      },
     });
 
     // Go custom runtime: zip built by `npm run build:hold-sweeper` (bootstrap).
@@ -168,7 +144,7 @@ export class GateholdStack extends cdk.Stack {
       architecture: lambda.Architecture.X86_64,
       handler: "bootstrap",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../go/hold-sweeper/dist/hold-sweeper.zip"),
+        path.join(projectRoot, "go/hold-sweeper/dist/hold-sweeper.zip"),
       ),
       timeout: cdk.Duration.seconds(60),
       memorySize: 256,
@@ -182,170 +158,82 @@ export class GateholdStack extends cdk.Stack {
     // ConfirmSeat / CapturePayment Catch → VoidAuthorization → (same) ReleaseSeat → …
     // IssueTicket / MarkConfirmed Catch → RefundPayment → ReleaseSeat → MarkRefunded
     // (Slice 3 LockSeat assert still pending).
-    const verifyHoldFn = new NodejsFunction(this, "VerifyHoldFn", {
-      functionName: `gatehold-${stage}-verify-hold`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/verify-hold.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+    const verifyHoldFn = createNodeFn(this, "VerifyHoldFn", {
+      stage,
+      name: "verify-hold",
+      entry: path.join(projectRoot, "services/saga-steps/src/verify-hold.ts"),
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
       },
-      bundling,
-      projectRoot,
     });
 
     const mockPaymentUrl = dockerReachableEndpoint(
       process.env.MOCK_PAYMENT_URL || "http://127.0.0.1:8090",
     );
-    const authorizePaymentFn = new NodejsFunction(this, "AuthorizePaymentFn", {
-      functionName: `gatehold-${stage}-authorize-payment`,
+    const authorizePaymentFn = createNodeFn(this, "AuthorizePaymentFn", {
+      stage,
+      name: "authorize-payment",
       entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/authorize-payment.ts",
+        projectRoot,
+        "services/saga-steps/src/authorize-payment.ts",
       ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.seconds(15),
-      memorySize: 256,
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
         MOCK_PAYMENT_URL: mockPaymentUrl,
-        ORDER_AMOUNT_CENTS:
-          process.env.ORDER_AMOUNT_CENTS ||
-          String(5000),
+        ORDER_AMOUNT_CENTS: process.env.ORDER_AMOUNT_CENTS || String(5000),
       },
-      bundling,
-      projectRoot,
     });
 
-    const verifyHoldTask = new tasks.LambdaInvoke(this, "VerifyHold", {
-      lambdaFunction: verifyHoldFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    // Retry only transient DynamoDB/infra errors thrown as TransientError.
-    // VerifyHoldError (business fail) is not listed → fails the execution.
-    verifyHoldTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
+    const verifyHoldTask = createSagaTask(this, "VerifyHold", verifyHoldFn);
 
-    const confirmSeatFn = new NodejsFunction(this, "ConfirmSeatFn", {
-      functionName: `gatehold-${stage}-confirm-seat`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/confirm-seat.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+    const confirmSeatFn = createNodeFn(this, "ConfirmSeatFn", {
+      stage,
+      name: "confirm-seat",
+      entry: path.join(projectRoot, "services/saga-steps/src/confirm-seat.ts"),
       environment: lambdaEnv,
-      bundling,
-      projectRoot,
     });
 
-    const capturePaymentFn = new NodejsFunction(this, "CapturePaymentFn", {
-      functionName: `gatehold-${stage}-capture-payment`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/capture-payment.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
+    const capturePaymentFn = createNodeFn(this, "CapturePaymentFn", {
+      stage,
+      name: "capture-payment",
+      entry: path.join(projectRoot, "services/saga-steps/src/capture-payment.ts"),
       timeout: cdk.Duration.seconds(15),
-      memorySize: 256,
       environment: {
         ...lambdaEnv,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
         MOCK_PAYMENT_URL: mockPaymentUrl,
       },
-      bundling,
-      projectRoot,
     });
 
-    const authorizePaymentTask = new tasks.LambdaInvoke(
+    const authorizePaymentTask = createSagaTask(
       this,
       "AuthorizePayment",
-      {
-        lambdaFunction: authorizePaymentFn,
-        outputPath: "$.Payload",
-        retryOnServiceExceptions: true,
-      },
+      authorizePaymentFn,
     );
-    authorizePaymentTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
 
-    const releaseSeatFn = new NodejsFunction(this, "ReleaseSeatFn", {
-      functionName: `gatehold-${stage}-release-seat`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/release-seat.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+    const releaseSeatFn = createNodeFn(this, "ReleaseSeatFn", {
+      stage,
+      name: "release-seat",
+      entry: path.join(projectRoot, "services/saga-steps/src/release-seat.ts"),
       environment: lambdaEnv,
-      bundling,
-      projectRoot,
     });
 
-    const markFailedFn = new NodejsFunction(this, "MarkFailedFn", {
-      functionName: `gatehold-${stage}-mark-failed`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/mark-failed.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+    const markFailedFn = createNodeFn(this, "MarkFailedFn", {
+      stage,
+      name: "mark-failed",
+      entry: path.join(projectRoot, "services/saga-steps/src/mark-failed.ts"),
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
       },
-      bundling,
-      projectRoot,
     });
 
-    const releaseSeatTask = new tasks.LambdaInvoke(this, "ReleaseSeat", {
-      lambdaFunction: releaseSeatFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    releaseSeatTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
-
-    const markFailedTask = new tasks.LambdaInvoke(this, "MarkFailed", {
-      lambdaFunction: markFailedFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    markFailedTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
+    const releaseSeatTask = createSagaTask(this, "ReleaseSeat", releaseSeatFn);
+    const markFailedTask = createSagaTask(this, "MarkFailed", markFailedFn);
 
     const sagaCompensated = new sfn.Succeed(this, "SagaCompensated");
     // Shared compensation tail (one ReleaseSeat / MarkFailed graph).
@@ -359,194 +247,107 @@ export class GateholdStack extends cdk.Stack {
       resultPath: "$.error",
     });
 
-    const voidAuthorizationFn = new NodejsFunction(
-      this,
-      "VoidAuthorizationFn",
-      {
-        functionName: `gatehold-${stage}-void-authorization`,
-        entry: path.join(
-          __dirname,
-          "../../services/saga-steps/src/void-authorization.ts",
-        ),
-        handler: "handler",
-        runtime: lambda.Runtime.NODEJS_22_X,
-        timeout: cdk.Duration.seconds(15),
-        memorySize: 256,
-        environment: {
-          ...lambdaEnv,
-          LEDGER_TABLE_NAME: ledgerTable.tableName,
-          MOCK_PAYMENT_URL: mockPaymentUrl,
-        },
-        bundling,
+    const voidAuthorizationFn = createNodeFn(this, "VoidAuthorizationFn", {
+      stage,
+      name: "void-authorization",
+      entry: path.join(
         projectRoot,
-      },
-    );
-
-    const voidAuthorizationTask = new tasks.LambdaInvoke(
-      this,
-      "VoidAuthorization",
-      {
-        lambdaFunction: voidAuthorizationFn,
-        outputPath: "$.Payload",
-        retryOnServiceExceptions: true,
-      },
-    );
-    voidAuthorizationTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
-
-    // Auth succeeded but ConfirmSeat or Capture failed → void first, then same tail.
-    // Capture never took money; seats may be PAYING (confirm fail) or SOLD (capture fail).
-    const voidThenRelease = voidAuthorizationTask.next(releaseSeatTask);
-
-    const confirmSeatTask = new tasks.LambdaInvoke(this, "ConfirmSeat", {
-      lambdaFunction: confirmSeatFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    confirmSeatTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
-    confirmSeatTask.addCatch(voidThenRelease, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const capturePaymentTask = new tasks.LambdaInvoke(this, "CapturePayment", {
-      lambdaFunction: capturePaymentFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    capturePaymentTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
-    capturePaymentTask.addCatch(voidThenRelease, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const issueTicketFn = new NodejsFunction(this, "IssueTicketFn", {
-      functionName: `gatehold-${stage}-issue-ticket`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/issue-ticket.ts",
+        "services/saga-steps/src/void-authorization.ts",
       ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-      bundling,
-      projectRoot,
-    });
-
-    const markConfirmedFn = new NodejsFunction(this, "MarkConfirmedFn", {
-      functionName: `gatehold-${stage}-mark-confirmed`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/mark-confirmed.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-      bundling,
-      projectRoot,
-    });
-
-    const refundPaymentFn = new NodejsFunction(this, "RefundPaymentFn", {
-      functionName: `gatehold-${stage}-refund-payment`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/refund-payment.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.seconds(15),
-      memorySize: 256,
       environment: {
         ...lambdaEnv,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
         MOCK_PAYMENT_URL: mockPaymentUrl,
       },
-      bundling,
-      projectRoot,
     });
 
-    const markRefundedFn = new NodejsFunction(this, "MarkRefundedFn", {
-      functionName: `gatehold-${stage}-mark-refunded`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-steps/src/mark-refunded.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+    const voidAuthorizationTask = createSagaTask(
+      this,
+      "VoidAuthorization",
+      voidAuthorizationFn,
+    );
+
+    // Auth succeeded but ConfirmSeat or Capture failed → void first, then same tail.
+    // Capture never took money; seats may be PAYING (confirm fail) or SOLD (capture fail).
+    const voidThenRelease = voidAuthorizationTask.next(releaseSeatTask);
+
+    const confirmSeatTask = createSagaTask(this, "ConfirmSeat", confirmSeatFn);
+    confirmSeatTask.addCatch(voidThenRelease, {
+      errors: ["States.ALL"],
+      resultPath: "$.error",
+    });
+
+    const capturePaymentTask = createSagaTask(
+      this,
+      "CapturePayment",
+      capturePaymentFn,
+    );
+    capturePaymentTask.addCatch(voidThenRelease, {
+      errors: ["States.ALL"],
+      resultPath: "$.error",
+    });
+
+    const issueTicketFn = createNodeFn(this, "IssueTicketFn", {
+      stage,
+      name: "issue-ticket",
+      entry: path.join(projectRoot, "services/saga-steps/src/issue-ticket.ts"),
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
       },
-      bundling,
-      projectRoot,
     });
 
-    const refundPaymentTask = new tasks.LambdaInvoke(this, "RefundPayment", {
-      lambdaFunction: refundPaymentFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
+    const markConfirmedFn = createNodeFn(this, "MarkConfirmedFn", {
+      stage,
+      name: "mark-confirmed",
+      entry: path.join(projectRoot, "services/saga-steps/src/mark-confirmed.ts"),
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+      },
     });
-    refundPaymentTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
+
+    const refundPaymentFn = createNodeFn(this, "RefundPaymentFn", {
+      stage,
+      name: "refund-payment",
+      entry: path.join(projectRoot, "services/saga-steps/src/refund-payment.ts"),
+      timeout: cdk.Duration.seconds(15),
+      environment: {
+        ...lambdaEnv,
+        LEDGER_TABLE_NAME: ledgerTable.tableName,
+        MOCK_PAYMENT_URL: mockPaymentUrl,
+      },
     });
+
+    const markRefundedFn = createNodeFn(this, "MarkRefundedFn", {
+      stage,
+      name: "mark-refunded",
+      entry: path.join(projectRoot, "services/saga-steps/src/mark-refunded.ts"),
+      environment: {
+        ...lambdaEnv,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+      },
+    });
+
+    const refundPaymentTask = createSagaTask(
+      this,
+      "RefundPayment",
+      refundPaymentFn,
+    );
 
     // Separate ReleaseSeat state: void path ends at MarkFailed; refund ends at MarkRefunded.
-    const releaseSeatAfterRefundTask = new tasks.LambdaInvoke(
+    const releaseSeatAfterRefundTask = createSagaTask(
       this,
       "ReleaseSeatAfterRefund",
-      {
-        lambdaFunction: releaseSeatFn,
-        outputPath: "$.Payload",
-        retryOnServiceExceptions: true,
-      },
+      releaseSeatFn,
     );
-    releaseSeatAfterRefundTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
 
-    const markRefundedTask = new tasks.LambdaInvoke(this, "MarkRefunded", {
-      lambdaFunction: markRefundedFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    markRefundedTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
+    const markRefundedTask = createSagaTask(
+      this,
+      "MarkRefunded",
+      markRefundedFn,
+    );
 
     // Capture succeeded but IssueTicket / MarkConfirmed failed → refund money, free seats.
     const refundThenRelease = refundPaymentTask
@@ -554,33 +355,17 @@ export class GateholdStack extends cdk.Stack {
       .next(markRefundedTask)
       .next(sagaCompensated);
 
-    const issueTicketTask = new tasks.LambdaInvoke(this, "IssueTicket", {
-      lambdaFunction: issueTicketFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    issueTicketTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
+    const issueTicketTask = createSagaTask(this, "IssueTicket", issueTicketFn);
     issueTicketTask.addCatch(refundThenRelease, {
       errors: ["States.ALL"],
       resultPath: "$.error",
     });
 
-    const markConfirmedTask = new tasks.LambdaInvoke(this, "MarkConfirmed", {
-      lambdaFunction: markConfirmedFn,
-      outputPath: "$.Payload",
-      retryOnServiceExceptions: true,
-    });
-    markConfirmedTask.addRetry({
-      errors: ["TransientError"],
-      interval: cdk.Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2,
-    });
+    const markConfirmedTask = createSagaTask(
+      this,
+      "MarkConfirmed",
+      markConfirmedFn,
+    );
     markConfirmedTask.addCatch(refundThenRelease, {
       errors: ["States.ALL"],
       resultPath: "$.error",
@@ -599,23 +384,16 @@ export class GateholdStack extends cdk.Stack {
       tracingEnabled: false,
     });
 
-    const sagaStarterFn = new NodejsFunction(this, "SagaStarterFn", {
-      functionName: `gatehold-${stage}-saga-starter`,
-      entry: path.join(
-        __dirname,
-        "../../services/saga-starter/src/handler.ts",
-      ),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
+    const sagaStarterFn = createNodeFn(this, "SagaStarterFn", {
+      stage,
+      name: "saga-starter",
+      entry: path.join(projectRoot, "services/saga-starter/src/handler.ts"),
       timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
         PURCHASE_SAGA_ARN: purchaseSaga.stateMachineArn,
       },
-      bundling,
-      projectRoot,
     });
     sagaStarterFn.addEventSource(
       new SqsEventSource(orderQueue, {
@@ -683,7 +461,7 @@ export class GateholdStack extends cdk.Stack {
     const holds = eventById.addResource("holds");
     holds.addMethod("POST", new apigateway.LambdaIntegration(holdSeatFn));
 
-    // POST /orders → create-order Lambda (handler stub until Phase 4 logic)
+    // POST /orders → create-order Lambda
     const orders = api.root.addResource("orders");
     orders.addMethod("POST", new apigateway.LambdaIntegration(createOrderFn));
 
@@ -770,29 +548,4 @@ export class GateholdStack extends cdk.Stack {
       value: mockPaymentUrl,
     });
   }
-}
-
-/**
- * Rewrite local emulator hosts so Lambda containers can reach MiniStack on the host.
- * `localhost`, `127.0.0.1`, and `*.localstack.cloud` all resolve to loopback inside
- * the container and must become `host.docker.internal` instead.
- */
-function dockerReachableEndpoint(endpoint: string): string {
-  try {
-    const url = new URL(endpoint);
-    const host = url.hostname;
-    const isLoopback =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.endsWith(".localstack.cloud") ||
-      host === "ministack";
-    if (isLoopback) {
-      url.hostname = "host.docker.internal";
-      url.port = url.port || "4566";
-      return url.toString().replace(/\/$/, "");
-    }
-  } catch {
-    // leave as-is
-  }
-  return endpoint;
 }

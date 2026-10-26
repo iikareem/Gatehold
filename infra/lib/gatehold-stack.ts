@@ -1,25 +1,19 @@
-import * as path from "path";
 import * as cdk from "aws-cdk-lib";
-import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import { DataPlane } from "./constructs/data-plane";
 import { HoldCapability } from "./constructs/hold-capability";
+import { HttpApi } from "./constructs/http-api";
 import { OrderAccept } from "./constructs/order-accept";
 import { PurchaseSaga } from "./constructs/purchase-saga";
-import {
-  baseLambdaEnv,
-  createNodeFn,
-  projectRoot,
-} from "./helpers/node-fn";
 
 export interface GateholdStackProps extends cdk.StackProps {
   stage: string;
 }
 
 /**
- * Phase 0–6 stack + Phase 7 slices 0–4:
- * DataPlane, HoldCapability, OrderAccept, PurchaseSaga,
- * health + HTTP API (Slice 5 will extract HttpApi).
+ * Phase 0–6 stack + Phase 7 slices 0–5:
+ * DataPlane, HoldCapability, OrderAccept, PurchaseSaga, HttpApi.
+ * Slice 6 thins this composer further (docs / MiniStack smoke).
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -85,42 +79,14 @@ export class GateholdStack extends cdk.Stack {
       markRefundedFn,
     } = purchase;
 
-    const lambdaEnv = baseLambdaEnv(stage, {
-      eventsTableName: eventsTable.tableName,
-      seatsTableName: seatsTable.tableName,
-    });
-
-    const healthFn = createNodeFn(this, "HealthFn", {
+    const http = new HttpApi(this, "Http", {
       stage,
-      name: "health",
-      entry: path.join(projectRoot, "services/health/src/handler.ts"),
-      environment: lambdaEnv,
+      eventsTable,
+      seatsTable,
+      holdSeatFn,
+      createOrderFn,
     });
-
-    eventsTable.grantReadData(healthFn);
-    seatsTable.grantReadData(healthFn);
-
-    const api = new apigateway.RestApi(this, "GateholdApi", {
-      restApiName: `gatehold-${stage}`,
-      deployOptions: { stageName: stage },
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: ["GET", "POST", "OPTIONS"],
-      },
-    });
-
-    const health = api.root.addResource("health");
-    health.addMethod("GET", new apigateway.LambdaIntegration(healthFn));
-
-    // POST /events/{eventId}/holds → hold-seat Lambda
-    const events = api.root.addResource("events");
-    const eventById = events.addResource("{eventId}");
-    const holds = eventById.addResource("holds");
-    holds.addMethod("POST", new apigateway.LambdaIntegration(holdSeatFn));
-
-    // POST /orders → create-order Lambda
-    const orders = api.root.addResource("orders");
-    orders.addMethod("POST", new apigateway.LambdaIntegration(createOrderFn));
+    const { api, healthFn } = http;
 
     new cdk.CfnOutput(this, "ApiUrl", {
       value: api.url,

@@ -560,7 +560,10 @@ HTTP/1.1 200 OK
 ```
 gatehold/
 ├── infra/                    # AWS CDK app (TypeScript)
-│   ├── lib/                  # Stacks and constructs
+│   ├── lib/
+│   │   ├── gatehold-stack.ts # Thin composer (wires constructs)
+│   │   ├── constructs/       # DataPlane, Holds, Orders, Purchase, Http
+│   │   └── helpers/          # createNodeFn, saga-task, stack outputs
 │   └── bin/
 ├── services/                 # Core services (TypeScript)
 │   ├── health/               # Phase 0 smoke / DynamoDB read check
@@ -798,7 +801,7 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 4: Orders, idempotency, SQS (+ DLQ; no consumer yet)
 - [ ] Phase 5: Mock payment provider (Go)
 - [x] Phase 6: Step Functions saga, ledger, `PAYING` / compensation
-- [ ] Phase 7: CDK composite constructs (split `GateholdStack` into nested constructs)
+- [x] Phase 7: CDK composite constructs (thin `GateholdStack` + domain constructs)
 - [ ] Phase 8: Streams relay, EventBridge, notifications
 - [ ] Phase 9: Cognito, least-privilege IAM, secrets
 - [ ] Phase 10: Signed tickets (KMS + S3)

@@ -254,6 +254,14 @@ npm run destroy:aws
 - [x] Expired / foreign hold → `409`; missing key → `400`
 - [x] No queue consumer — inspect messages with `/_ministack/sqs/messages`
 
+## Phase 7 checklist
+
+- [x] `infra/lib/constructs/` — DataPlane, HoldCapability, OrderAccept, PurchaseSaga, HttpApi
+- [x] `infra/lib/helpers/` — `createNodeFn`, `createSagaTask`, `addGateholdOutputs`
+- [x] `gatehold-stack.ts` is a short composer (wire constructs + outputs only)
+- [x] Output names unchanged (`ApiUrl`, table names, function names, saga ARN)
+- [x] `cdk synth` + MiniStack smoke: health → hold → order → saga
+
 ## TODO (later)
 
 - Replay refund DLQ

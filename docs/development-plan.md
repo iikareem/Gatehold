@@ -42,9 +42,9 @@ Related docs:
 
 ## Current baseline
 
-Phases 0–6 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, all in one flat `infra/lib/gatehold-stack.ts` (~800 lines).
+Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
 
-**Next:** Phase 7 — split that stack into CDK composite constructs before adding more domains (streams, auth, cancel/refund).
+**Next:** Phase 8 — Streams / EventBridge / notifications (as a new construct, not paste into the stack).
 
 ---
 
@@ -582,7 +582,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 4 — Orders, idempotency, SQS
 - [ ] Phase 5 — Mock payment provider
 - [x] Phase 6 — Purchase saga
-- [ ] Phase 7 — CDK composite constructs (infra refactor)
+- [x] Phase 7 — CDK composite constructs (infra refactor)
 - [ ] Phase 8 — Streams / EventBridge / notifications
 - [ ] Phase 9 — Auth, IAM, secrets
 - [ ] Phase 10 — Signed tickets

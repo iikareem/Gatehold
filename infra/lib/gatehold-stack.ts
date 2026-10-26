@@ -1,14 +1,12 @@
 import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as lambda from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import * as scheduler from "aws-cdk-lib/aws-scheduler";
-import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import { Construct } from "constructs";
 import { DataPlane } from "./constructs/data-plane";
+import { HoldCapability } from "./constructs/hold-capability";
 import {
   baseLambdaEnv,
   createNodeFn,
@@ -22,11 +20,10 @@ export interface GateholdStackProps extends cdk.StackProps {
 }
 
 /**
- * Phase 0–6 stack + Phase 7 slices 0–1:
- * DataPlane (tables), helpers for Node Lambdas / saga tasks,
- * health + hold-seat + hold-sweeper + create-order, HTTP API,
- * EventBridge Scheduler → sweeper, order SQS (+ DLQ),
- * purchase saga + saga-starter.
+ * Phase 0–6 stack + Phase 7 slices 0–2:
+ * DataPlane (tables), HoldCapability (hold-seat + sweeper + schedule),
+ * helpers for Node Lambdas / saga tasks, health + create-order, HTTP API,
+ * order SQS (+ DLQ), purchase saga + saga-starter.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -67,6 +64,13 @@ export class GateholdStack extends cdk.Stack {
       },
     });
 
+    const holdCapability = new HoldCapability(this, "Holds", {
+      stage,
+      seatsTable,
+      eventsTableName: eventsTable.tableName,
+    });
+    const { holdSeatFn, holdSweeperFn } = holdCapability;
+
     const lambdaEnv = baseLambdaEnv(stage, {
       eventsTableName: eventsTable.tableName,
       seatsTableName: seatsTable.tableName,
@@ -76,13 +80,6 @@ export class GateholdStack extends cdk.Stack {
       stage,
       name: "health",
       entry: path.join(projectRoot, "services/health/src/handler.ts"),
-      environment: lambdaEnv,
-    });
-
-    const holdSeatFn = createNodeFn(this, "HoldSeatFn", {
-      stage,
-      name: "hold-seat",
-      entry: path.join(projectRoot, "services/hold-seat/src/handler.ts"),
       environment: lambdaEnv,
     });
 
@@ -96,20 +93,6 @@ export class GateholdStack extends cdk.Stack {
         IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
         ORDER_QUEUE_URL: orderQueue.queueUrl,
       },
-    });
-
-    // Go custom runtime: zip built by `npm run build:hold-sweeper` (bootstrap).
-    const holdSweeperFn = new lambda.Function(this, "HoldSweeperFn", {
-      functionName: `gatehold-${stage}-hold-sweeper`,
-      runtime: lambda.Runtime.PROVIDED_AL2023,
-      architecture: lambda.Architecture.X86_64,
-      handler: "bootstrap",
-      code: lambda.Code.fromAsset(
-        path.join(projectRoot, "go/hold-sweeper/dist/hold-sweeper.zip"),
-      ),
-      timeout: cdk.Duration.seconds(60),
-      memorySize: 256,
-      environment: lambdaEnv,
     });
 
     // Phase 6 happy path:
@@ -365,8 +348,6 @@ export class GateholdStack extends cdk.Stack {
 
     eventsTable.grantReadData(healthFn);
     seatsTable.grantReadData(healthFn);
-    seatsTable.grantReadWriteData(holdSeatFn);
-    seatsTable.grantReadWriteData(holdSweeperFn);
 
     eventsTable.grantReadData(createOrderFn);
     seatsTable.grantReadWriteData(createOrderFn);
@@ -395,14 +376,6 @@ export class GateholdStack extends cdk.Stack {
     ordersTable.grantReadWriteData(markConfirmedFn);
     ordersTable.grantReadWriteData(markFailedFn);
     ordersTable.grantReadWriteData(markRefundedFn);
-
-    // Timer only (not the Phase 8 domain event bus).
-    new scheduler.Schedule(this, "HoldSweeperSchedule", {
-      scheduleName: `gatehold-${stage}-hold-sweeper`,
-      description: "Release expired HELD seats (hold-sweeper)",
-      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(1)),
-      target: new targets.LambdaInvoke(holdSweeperFn),
-    });
 
     const api = new apigateway.RestApi(this, "GateholdApi", {
       restApiName: `gatehold-${stage}`,

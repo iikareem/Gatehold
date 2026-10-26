@@ -657,7 +657,7 @@ export class GateholdStack extends cdk.Stack {
     ordersTable.grantReadWriteData(markFailedFn);
     ordersTable.grantReadWriteData(markRefundedFn);
 
-    // Timer only (not the Phase 7 domain event bus).
+    // Timer only (not the Phase 8 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {
       scheduleName: `gatehold-${stage}-hold-sweeper`,
       description: "Release expired HELD seats (hold-sweeper)",

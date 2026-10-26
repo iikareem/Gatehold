@@ -318,4 +318,4 @@ Do not expect these to work:
 
 - `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
 - Order queue **consumer** / saga / payment — later phases (messages stay on SQS)
-- Cognito JWT — Phase 8 (`X-User-Id` stub only)
+- Cognito JWT — Phase 9 (`X-User-Id` stub only)

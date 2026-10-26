@@ -797,15 +797,16 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 3: Group holds (`seatIds` 1..8 + `TransactWriteItems`; block search deferred)
 - [x] Phase 4: Orders, idempotency, SQS (+ DLQ; no consumer yet)
 - [ ] Phase 5: Mock payment provider (Go)
-- [ ] Phase 6: Step Functions saga, ledger, `PAYING` / compensation
-- [ ] Phase 7: Streams relay, EventBridge, notifications
-- [ ] Phase 8: Cognito, least-privilege IAM, secrets
-- [ ] Phase 9: Signed tickets (KMS + S3)
-- [ ] Phase 10: Event cancellation, refund orchestrator/workers, batch tracking
-- [ ] Phase 11: Reconciler + independent auditor
-- [ ] Phase 12: Dashboards, alarms, tracing
-- [ ] Phase 13: Failure suite, load test, results table, cost report
-- [ ] Phase 14: CI/CD, dev/prod stages (optional)
+- [x] Phase 6: Step Functions saga, ledger, `PAYING` / compensation
+- [ ] Phase 7: CDK composite constructs (split `GateholdStack` into nested constructs)
+- [ ] Phase 8: Streams relay, EventBridge, notifications
+- [ ] Phase 9: Cognito, least-privilege IAM, secrets
+- [ ] Phase 10: Signed tickets (KMS + S3)
+- [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
+- [ ] Phase 12: Reconciler + independent auditor
+- [ ] Phase 13: Dashboards, alarms, tracing
+- [ ] Phase 14: Failure suite, load test, results table, cost report
+- [ ] Phase 15: CI/CD, dev/prod stages (optional)
 
 Possible extensions:
 

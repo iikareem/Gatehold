@@ -51,7 +51,7 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 
 ## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
-**Auth stub (until Phase 8 Cognito):** read `X-User-Id` header; if missing, use `test-user`. Never trust a `userId` from the body.
+**Auth stub (until Phase 9 Cognito):** read `X-User-Id` header; if missing, use `test-user`. Never trust a `userId` from the body.
 
 **Request body:**
 
@@ -201,7 +201,7 @@ Table name: `gatehold-{stage}-orders`
 | `idempotencyKey` | string | Same client `Idempotency-Key` |
 | `createdAt` | string | ISO-8601 |
 | `amount` | number | Optional until payment |
-| `ticketIds` | string[] | Optional; Phase 6 stub `tkt:{orderId}:{seatId}` until Phase 9 |
+| `ticketIds` | string[] | Optional; Phase 6 stub `tkt:{orderId}:{seatId}` until Phase 10 |
 | `executionArn` | string | Optional until saga |
 | `failReason` | string | Optional debugging |
 
@@ -439,7 +439,7 @@ Implementation: `Chaos.Before` (fail before accept) and `Chaos.After` (latency /
 
 ### Out of scope (later phases)
 
-- Secrets Manager for mock-payment URL (Phase 8; env var is fine in Phase 6)
+- Secrets Manager for mock-payment URL (Phase 9; env var is fine in Phase 6)
 - Curls for live smoke → [`api.md`](./api.md)
 
 ## Phase 6 — Ledger + saga contracts (Slice 0)
@@ -499,7 +499,7 @@ ASL: retry `TransientError` only. Do **not** retry `CapturePaymentError`.
 
 ### IssueTicket (saga Task — stub)
 
-Phase 6 writes **placeholder** ticket ids only (no KMS/S3 — Phase 9).
+Phase 6 writes **placeholder** ticket ids only (no KMS/S3 — Phase 10).
 
 1. For each `seatId`, build deterministic id `tkt:{orderId}:{seatId}`.
 2. `SET ticketIds = if_not_exists(ticketIds, :ticketIds)` on the order (`attribute_exists(orderId)`).

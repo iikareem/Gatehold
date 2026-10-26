@@ -18,7 +18,7 @@ export const MAX_HOLD_SEATS = 8;
 
 /**
  * Phase 3 — hold 1..MAX_HOLD_SEATS seats via TransactWriteItems.
- * Auth stub: X-User-Id header, else test-user (Cognito in Phase 8).
+ * Auth stub: X-User-Id header, else test-user (Cognito in Phase 9).
  */
 export async function handler(
   event: APIGatewayProxyEvent,

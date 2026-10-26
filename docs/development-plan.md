@@ -42,9 +42,9 @@ Related docs:
 
 ## Current baseline
 
-Phase 0 is implemented: TypeScript build, shared DynamoDB helpers, Events/Seats tables, health Lambda + API, seed/get-seat scripts, MiniStack deploy path.
+Phases 0–6 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, all in one flat `infra/lib/gatehold-stack.ts` (~800 lines).
 
-Start the next unfinished phase below.
+**Next:** Phase 7 — split that stack into CDK composite constructs before adding more domains (streams, auth, cancel/refund).
 
 ---
 
@@ -85,7 +85,7 @@ Start the next unfinished phase below.
 - `hold-seat` Lambda: body `{ "seatIds": ["A-12-07"] }` (length 1)
 - Conditional update: `AVAILABLE → HELD` (or expired `HELD` reclaim) with `holdId`, `holdOwner`, `expiresAt`
 - Conflict → `409`; success → `201` with `holdId`, `seatIds`, `expiresAt`
-- Auth stub: accept a header or fixed test user for now; document that Cognito replaces this in Phase 8
+- Auth stub: accept a header or fixed test user for now; document that Cognito replaces this in Phase 9
 - Unit tests for the condition expression (available, already held, expired held)
 - Document the condition in `contracts.md`
 
@@ -144,14 +144,14 @@ Start the next unfinished phase below.
 
 **Learn**
 
-- EventBridge Scheduler vs EventBridge bus (Phase 7 is the bus for notifications)
+- EventBridge Scheduler vs EventBridge bus (Phase 8 is the bus for notifications)
 - Scheduled Lambda packaging for Go
 
 **Done when**
 
 - Scheduler (or forced invoke of the deployed Lambda) releases an expired hold without `go run`
 
-**Note:** Phase 7 EventBridge is still for **domain events** (streams → email/audit). Scheduler here is only the **timer** for the sweeper.
+**Note:** Phase 8 EventBridge is still for **domain events** (streams → email/audit). Scheduler here is only the **timer** for the sweeper.
 
 **Status:** Done — CDK packages `hold-sweeper` as a Go Lambda; EventBridge Scheduler invokes it on a 1-minute rate.
 
@@ -256,7 +256,7 @@ Start the next unfinished phase below.
   4. ~~CheckPaymentStatus (on timeout / unknown)~~ — **skipped** (retries + TransientError only; no status Choice)
   5. ConfirmSeat (`PAYING → SOLD`)  
   6. CapturePayment  
-  7. IssueTicket (Phase 9 can stub S3/KMS; for now write a placeholder ticket record)  
+  7. IssueTicket (Phase 10 can stub S3/KMS; for now write a placeholder ticket record)  
   8. MarkConfirmed  
 - Compensation: VoidAuthorization, RefundPayment, ReleaseSeat, MarkFailed, MarkRefunded
 - Ledger conditional writes for `AUTH` / `CAPTURE` / `VOID` / `REFUND` (schema in `contracts.md` Slice 0)
@@ -279,9 +279,68 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 7 — Streams, EventBridge, notifications
+## Phase 7 — CDK composite constructs (infra refactor)
+
+**Goal:** Split the monolithic `GateholdStack` (~800 lines of tables, Lambdas, Step Functions tasks, grants, API, and outputs) into nested CDK constructs so new domains (streams, auth, cancel/refund) do not keep pasting the same boilerplate.
+
+This phase changes **infra layout only**. No new product behavior. Deploy + hold → order → saga must still work on MiniStack after the split.
+
+**Why now (not earlier)**
+
+- Phases 0–6 needed one flat file so the purchase path stayed visible while learning.
+- After Phase 6 the domains are stable enough to name: data, holds, orders, purchase saga, HTTP API.
+- Phase 8+ would dump streams / EventBridge / notifications into the same file and make wiring (grants, env, Catch chains) hard to review.
+
+**What “composite” means here**
+
+In CDK, nested `Construct`s are the Composite pattern: small pieces (`NodejsFunction`, table, route) compose into bigger units (`PurchaseSaga`, `DataPlane`), which compose into the stack. The stack becomes a thin assembler; each construct owns a cohesive slice and exposes only what others need.
+
+```text
+GateholdStack
+├── DataPlane          (events, seats, orders, idempotency, ledger)
+├── HoldCapability     (hold-seat, sweeper, schedule)
+├── OrderAccept        (create-order, order queue / DLQ)
+├── PurchaseSaga       (state machine + step Lambdas + saga-starter)
+└── HttpApi            (API Gateway routes)
+```
+
+**Build**
+
+- Add `infra/lib/constructs/` (or equivalent) and move resources out of the flat stack into the constructs above
+- Shared helpers where paste repeats: e.g. `createNodeFn(...)` for runtime / timeout / bundling / `lambdaEnv`, and a small helper for saga `LambdaInvoke` + `TransientError` retry
+- Each construct creates its resources, grants IAM at its edges, and exports props others need (`ordersTable`, `purchaseSaga`, queue URLs, etc.)
+- Keep a single CloudFormation stack / MiniStack deploy path — compose constructs, do **not** introduce nested stacks or multi-account layout
+- Update CfnOutputs so runbook / scripts still find the same names
+- `cdk synth` + MiniStack redeploy; smoke hold → create-order → saga happy path (and one compensation path if easy)
+
+**Do not**
+
+- Change saga ASL semantics, Lambda handlers, or table schemas
+- Add Streams / EventBridge bus / Cognito / tickets in this phase
+- Over-abstract: prefer clear domain constructs over a deep hierarchy
+
+**Learn**
+
+- Composite / construct composition: stop copying Lambda + env + grant + retry setup
+- Props at construct boundaries vs chasing identifiers across an 800-line file
+- Why refactor after the domain is nameable, not mid-saga slices
+
+**Done when**
+
+- `gatehold-stack.ts` is a short composer (constructs + wiring), not the place every resource is declared
+- Repeated `NodejsFunction` / saga-task boilerplate lives in helpers or construct internals
+- MiniStack deploy still serves health, holds, orders, and purchase saga end-to-end
+- README / runbook paths still match exported outputs
+
+**Prerequisite:** Phase 6 complete (happy path + compensation exist so `PurchaseSaga` is a real boundary).
+
+---
+
+## Phase 8 — Streams, EventBridge, notifications
 
 **Goal:** Domain events follow data changes; fans can be notified without coupling.
+
+**Prerequisite:** Phase 7 composites in place so this lands as a new construct (e.g. `DomainEvents` / `Notifications`), not more paste into a giant stack.
 
 **Build**
 
@@ -289,6 +348,7 @@ Start the next unfinished phase below.
 - `stream-relay` (Go): stream record → EventBridge detail types
 - Minimal consumer: log and/or SNS → SQS → SES (MiniStack inspect endpoints)
 - Contract: detail types for order confirmed, refunded, etc.
+- Prefer a dedicated construct under `infra/lib/constructs/`
 
 **Learn**
 
@@ -302,7 +362,7 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 8 — Auth, IAM, and secrets
+## Phase 9 — Auth, IAM, and secrets
 
 **Goal:** Real identity and least privilege without changing business rules.
 
@@ -313,7 +373,7 @@ Start the next unfinished phase below.
 - Replace Phase 1 auth stub
 - Secrets Manager / SSM for mock-payment URL, hold TTL, group cap, refund rate
 - Tighten IAM per Lambda and state machine (start broad in early phases, narrow here)
-- Admin-only routes reserved for cancel/refund (can return `501` until Phase 10)
+- Admin-only routes reserved for cancel/refund (can return `501` until Phase 11)
 
 **Learn**
 
@@ -328,7 +388,7 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 9 — Signed tickets
+## Phase 10 — Signed tickets
 
 **Goal:** Confirmed orders produce verifiable tickets.
 
@@ -347,11 +407,11 @@ Start the next unfinished phase below.
 
 - Confirmed order → ticket bytes in S3
 - Tampered payload fails verification
-- Cancelled event fails verification even with a valid signature (can fully prove after Phase 10)
+- Cancelled event fails verification even with a valid signature (can fully prove after Phase 11)
 
 ---
 
-## Phase 10 — Event cancellation and mass refunds
+## Phase 11 — Event cancellation and mass refunds
 
 **Goal:** Cancel stops selling and refunds every paid order once, under rate limits.
 
@@ -381,7 +441,7 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 11 — Reconciler and auditor
+## Phase 12 — Reconciler and auditor
 
 **Goal:** Independent repair and verification.
 
@@ -404,7 +464,7 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 12 — Observability
+## Phase 13 — Observability
 
 **Goal:** See contention, saga health, and refund backpressure.
 
@@ -427,7 +487,7 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 13 — Failure suite, load test, results
+## Phase 14 — Failure suite, load test, results
 
 **Goal:** Evidence for the README results table.
 
@@ -451,7 +511,7 @@ Start the next unfinished phase below.
 
 ---
 
-## Phase 14 — CI/CD and environments (optional polish)
+## Phase 15 — CI/CD and environments (optional polish)
 
 **Goal:** Repeatable deploys for portfolio credibility.
 
@@ -478,8 +538,9 @@ Use these as “I can show this” moments while learning:
 | A | 1–2 | Two terminals race one seat; winner/loser; expiry reclaim |
 | B | 3 | Family of four holds a block; overlapping group gets `409` |
 | C | 4–6 | Full purchase with mock payment chaos; show compensation |
-| D | 10 | Cancel mid-sale; refund batch completes; no double refunds |
-| E | 11–13 | Load run + auditor green; README results filled |
+| D | 7 | Stack is composed constructs; same purchase path still works |
+| E | 11 | Cancel mid-sale; refund batch completes; no double refunds |
+| F | 12–14 | Load run + auditor green; README results filled |
 
 ---
 
@@ -494,17 +555,18 @@ Use these as “I can show this” moments while learning:
                      └── 4 Orders + idempotency + SQS
                           └── 5 Mock payment
                                └── 6 Saga + ledger + PAYING
-                                    ├── 7 Streams / EventBridge bus / notifications
-                                    ├── 8 Cognito + IAM + secrets
-                                    ├── 9 Signed tickets
-                                    └── 10 Cancel + refunds
-                                         └── 11 Reconciler + auditor
-                                              └── 12 Observability
-                                                   └── 13 Load / failure / results
-                                                        └── 14 CI/CD (optional)
+                                    └── 7 CDK composites (infra refactor)
+                                         ├── 8 Streams / EventBridge bus / notifications
+                                         ├── 9 Cognito + IAM + secrets
+                                         ├── 10 Signed tickets
+                                         └── 11 Cancel + refunds
+                                              └── 12 Reconciler + auditor
+                                                   └── 13 Observability
+                                                        └── 14 Load / failure / results
+                                                             └── 15 CI/CD (optional)
 ```
 
-Phases 7–9 can overlap slightly after Phase 6, but **Phase 10 must not start** until capture + ledger + mock refunds work.
+**Phase 7 is required before Phase 8+** so new domains become constructs, not more paste. Phases 8–10 can overlap slightly after Phase 7, but **Phase 11 must not start** until capture + ledger + mock refunds work.
 
 ---
 
@@ -520,13 +582,14 @@ Copy into a notebook or tick in place:
 - [x] Phase 4 — Orders, idempotency, SQS
 - [ ] Phase 5 — Mock payment provider
 - [x] Phase 6 — Purchase saga
-- [ ] Phase 7 — Streams / EventBridge / notifications
-- [ ] Phase 8 — Auth, IAM, secrets
-- [ ] Phase 9 — Signed tickets
-- [ ] Phase 10 — Cancellation and mass refunds
-- [ ] Phase 11 — Reconciler and auditor
-- [ ] Phase 12 — Observability
-- [ ] Phase 13 — Failure suite, load, results
-- [ ] Phase 14 — CI/CD (optional)
+- [ ] Phase 7 — CDK composite constructs (infra refactor)
+- [ ] Phase 8 — Streams / EventBridge / notifications
+- [ ] Phase 9 — Auth, IAM, secrets
+- [ ] Phase 10 — Signed tickets
+- [ ] Phase 11 — Cancellation and mass refunds
+- [ ] Phase 12 — Reconciler and auditor
+- [ ] Phase 13 — Observability
+- [ ] Phase 14 — Failure suite, load, results
+- [ ] Phase 15 — CI/CD (optional)
 
 When you complete a phase, add a short note under README “What I Learned” the same day — future you will forget the bug that taught the lesson.

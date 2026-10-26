@@ -33,7 +33,7 @@ export class TransientError extends Error {
 /**
  * Phase 6 Slice 7 — IssueTicket (stub).
  * Writes deterministic placeholder ticketIds on the order (no KMS/S3 yet).
- * Phase 9 replaces this with signed artifacts in S3.
+ * Phase 10 replaces this with signed artifacts in S3.
  */
 export async function handler(
   event: AuthorizedSagaState,

@@ -49,7 +49,7 @@ export interface OrderItem {
   amount?: number;
   executionArn?: string;
   failReason?: string;
-  /** Placeholder ticket ids until Phase 9 KMS/S3 issuance. */
+  /** Placeholder ticket ids until Phase 10 KMS/S3 issuance. */
   ticketIds?: string[];
 }
 
@@ -90,7 +90,7 @@ export interface AuthorizedSagaState extends SagaInput {
 }
 
 /**
- * Saga state after IssueTicket stub — placeholder ids until Phase 9.
+ * Saga state after IssueTicket stub — placeholder ids until Phase 10.
  */
 export interface TicketedSagaState extends AuthorizedSagaState {
   ticketIds: string[];
@@ -136,7 +136,7 @@ export function paymentRefundKey(orderId: string): string {
   return `pay:refund:${orderId}`;
 }
 
-/** Deterministic placeholder ticket id (Phase 6 stub; Phase 9 replaces with signed artifacts). */
+/** Deterministic placeholder ticket id (Phase 6 stub; Phase 10 replaces with signed artifacts). */
 export function placeholderTicketId(orderId: string, seatId: string): string {
   return `tkt:${orderId}:${seatId}`;
 }

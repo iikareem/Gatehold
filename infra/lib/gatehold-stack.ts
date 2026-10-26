@@ -1,29 +1,25 @@
 import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import { Construct } from "constructs";
 import { DataPlane } from "./constructs/data-plane";
 import { HoldCapability } from "./constructs/hold-capability";
 import { OrderAccept } from "./constructs/order-accept";
+import { PurchaseSaga } from "./constructs/purchase-saga";
 import {
   baseLambdaEnv,
   createNodeFn,
-  dockerReachableEndpoint,
   projectRoot,
 } from "./helpers/node-fn";
-import { createSagaTask } from "./helpers/saga-task";
 
 export interface GateholdStackProps extends cdk.StackProps {
   stage: string;
 }
 
 /**
- * Phase 0–6 stack + Phase 7 slices 0–3:
- * DataPlane, HoldCapability, OrderAccept (queue/DLQ + create-order),
- * helpers for Node Lambdas / saga tasks, health, HTTP API,
- * purchase saga + saga-starter.
+ * Phase 0–6 stack + Phase 7 slices 0–4:
+ * DataPlane, HoldCapability, OrderAccept, PurchaseSaga,
+ * health + HTTP API (Slice 5 will extract HttpApi).
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -64,6 +60,31 @@ export class GateholdStack extends cdk.Stack {
     });
     const { orderQueue, orderDlq, createOrderFn } = orderAccept;
 
+    const purchase = new PurchaseSaga(this, "Purchase", {
+      stage,
+      eventsTable,
+      seatsTable,
+      ordersTable,
+      ledgerTable,
+      orderQueue,
+    });
+    const {
+      purchaseSaga,
+      sagaStarterFn,
+      mockPaymentUrl,
+      verifyHoldFn,
+      authorizePaymentFn,
+      confirmSeatFn,
+      capturePaymentFn,
+      issueTicketFn,
+      markConfirmedFn,
+      releaseSeatFn,
+      markFailedFn,
+      voidAuthorizationFn,
+      refundPaymentFn,
+      markRefundedFn,
+    } = purchase;
+
     const lambdaEnv = baseLambdaEnv(stage, {
       eventsTableName: eventsTable.tableName,
       seatsTableName: seatsTable.tableName,
@@ -76,281 +97,8 @@ export class GateholdStack extends cdk.Stack {
       environment: lambdaEnv,
     });
 
-    // Phase 6 happy path:
-    // VerifyHold → AuthorizePayment → ConfirmSeat → CapturePayment
-    // → IssueTicket → MarkConfirmed → Succeed
-    // AuthorizePayment Catch → ReleaseSeat → MarkFailed → SagaCompensated
-    // ConfirmSeat / CapturePayment Catch → VoidAuthorization → (same) ReleaseSeat → …
-    // IssueTicket / MarkConfirmed Catch → RefundPayment → ReleaseSeat → MarkRefunded
-    // (Slice 3 LockSeat assert still pending).
-    const verifyHoldFn = createNodeFn(this, "VerifyHoldFn", {
-      stage,
-      name: "verify-hold",
-      entry: path.join(projectRoot, "services/saga-steps/src/verify-hold.ts"),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-    });
-
-    const mockPaymentUrl = dockerReachableEndpoint(
-      process.env.MOCK_PAYMENT_URL || "http://127.0.0.1:8090",
-    );
-    const authorizePaymentFn = createNodeFn(this, "AuthorizePaymentFn", {
-      stage,
-      name: "authorize-payment",
-      entry: path.join(
-        projectRoot,
-        "services/saga-steps/src/authorize-payment.ts",
-      ),
-      timeout: cdk.Duration.seconds(15),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-        LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
-        ORDER_AMOUNT_CENTS: process.env.ORDER_AMOUNT_CENTS || String(5000),
-      },
-    });
-
-    const verifyHoldTask = createSagaTask(this, "VerifyHold", verifyHoldFn);
-
-    const confirmSeatFn = createNodeFn(this, "ConfirmSeatFn", {
-      stage,
-      name: "confirm-seat",
-      entry: path.join(projectRoot, "services/saga-steps/src/confirm-seat.ts"),
-      environment: lambdaEnv,
-    });
-
-    const capturePaymentFn = createNodeFn(this, "CapturePaymentFn", {
-      stage,
-      name: "capture-payment",
-      entry: path.join(projectRoot, "services/saga-steps/src/capture-payment.ts"),
-      timeout: cdk.Duration.seconds(15),
-      environment: {
-        ...lambdaEnv,
-        LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
-      },
-    });
-
-    const authorizePaymentTask = createSagaTask(
-      this,
-      "AuthorizePayment",
-      authorizePaymentFn,
-    );
-
-    const releaseSeatFn = createNodeFn(this, "ReleaseSeatFn", {
-      stage,
-      name: "release-seat",
-      entry: path.join(projectRoot, "services/saga-steps/src/release-seat.ts"),
-      environment: lambdaEnv,
-    });
-
-    const markFailedFn = createNodeFn(this, "MarkFailedFn", {
-      stage,
-      name: "mark-failed",
-      entry: path.join(projectRoot, "services/saga-steps/src/mark-failed.ts"),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-    });
-
-    const releaseSeatTask = createSagaTask(this, "ReleaseSeat", releaseSeatFn);
-    const markFailedTask = createSagaTask(this, "MarkFailed", markFailedFn);
-
-    const sagaCompensated = new sfn.Succeed(this, "SagaCompensated");
-    // Shared compensation tail (one ReleaseSeat / MarkFailed graph).
-    const releaseThenFail = releaseSeatTask
-      .next(markFailedTask)
-      .next(sagaCompensated);
-
-    // Auth never succeeded → no void; free seats + mark order FAILED.
-    authorizePaymentTask.addCatch(releaseThenFail, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const voidAuthorizationFn = createNodeFn(this, "VoidAuthorizationFn", {
-      stage,
-      name: "void-authorization",
-      entry: path.join(
-        projectRoot,
-        "services/saga-steps/src/void-authorization.ts",
-      ),
-      timeout: cdk.Duration.seconds(15),
-      environment: {
-        ...lambdaEnv,
-        LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
-      },
-    });
-
-    const voidAuthorizationTask = createSagaTask(
-      this,
-      "VoidAuthorization",
-      voidAuthorizationFn,
-    );
-
-    // Auth succeeded but ConfirmSeat or Capture failed → void first, then same tail.
-    // Capture never took money; seats may be PAYING (confirm fail) or SOLD (capture fail).
-    const voidThenRelease = voidAuthorizationTask.next(releaseSeatTask);
-
-    const confirmSeatTask = createSagaTask(this, "ConfirmSeat", confirmSeatFn);
-    confirmSeatTask.addCatch(voidThenRelease, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const capturePaymentTask = createSagaTask(
-      this,
-      "CapturePayment",
-      capturePaymentFn,
-    );
-    capturePaymentTask.addCatch(voidThenRelease, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const issueTicketFn = createNodeFn(this, "IssueTicketFn", {
-      stage,
-      name: "issue-ticket",
-      entry: path.join(projectRoot, "services/saga-steps/src/issue-ticket.ts"),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-    });
-
-    const markConfirmedFn = createNodeFn(this, "MarkConfirmedFn", {
-      stage,
-      name: "mark-confirmed",
-      entry: path.join(projectRoot, "services/saga-steps/src/mark-confirmed.ts"),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-    });
-
-    const refundPaymentFn = createNodeFn(this, "RefundPaymentFn", {
-      stage,
-      name: "refund-payment",
-      entry: path.join(projectRoot, "services/saga-steps/src/refund-payment.ts"),
-      timeout: cdk.Duration.seconds(15),
-      environment: {
-        ...lambdaEnv,
-        LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
-      },
-    });
-
-    const markRefundedFn = createNodeFn(this, "MarkRefundedFn", {
-      stage,
-      name: "mark-refunded",
-      entry: path.join(projectRoot, "services/saga-steps/src/mark-refunded.ts"),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-      },
-    });
-
-    const refundPaymentTask = createSagaTask(
-      this,
-      "RefundPayment",
-      refundPaymentFn,
-    );
-
-    // Separate ReleaseSeat state: void path ends at MarkFailed; refund ends at MarkRefunded.
-    const releaseSeatAfterRefundTask = createSagaTask(
-      this,
-      "ReleaseSeatAfterRefund",
-      releaseSeatFn,
-    );
-
-    const markRefundedTask = createSagaTask(
-      this,
-      "MarkRefunded",
-      markRefundedFn,
-    );
-
-    // Capture succeeded but IssueTicket / MarkConfirmed failed → refund money, free seats.
-    const refundThenRelease = refundPaymentTask
-      .next(releaseSeatAfterRefundTask)
-      .next(markRefundedTask)
-      .next(sagaCompensated);
-
-    const issueTicketTask = createSagaTask(this, "IssueTicket", issueTicketFn);
-    issueTicketTask.addCatch(refundThenRelease, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const markConfirmedTask = createSagaTask(
-      this,
-      "MarkConfirmed",
-      markConfirmedFn,
-    );
-    markConfirmedTask.addCatch(refundThenRelease, {
-      errors: ["States.ALL"],
-      resultPath: "$.error",
-    });
-
-    const sagaDefinition = verifyHoldTask
-      .next(authorizePaymentTask)
-      .next(confirmSeatTask)
-      .next(capturePaymentTask)
-      .next(issueTicketTask)
-      .next(markConfirmedTask)
-      .next(new sfn.Succeed(this, "SagaHappyPathDone"));
-    const purchaseSaga = new sfn.StateMachine(this, "PurchaseSaga", {
-      stateMachineName: `gatehold-${stage}-purchase-saga`,
-      definitionBody: sfn.DefinitionBody.fromChainable(sagaDefinition),
-      tracingEnabled: false,
-    });
-
-    const sagaStarterFn = createNodeFn(this, "SagaStarterFn", {
-      stage,
-      name: "saga-starter",
-      entry: path.join(projectRoot, "services/saga-starter/src/handler.ts"),
-      timeout: cdk.Duration.seconds(30),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-        PURCHASE_SAGA_ARN: purchaseSaga.stateMachineArn,
-      },
-    });
-    sagaStarterFn.addEventSource(
-      new SqsEventSource(orderQueue, {
-        batchSize: 5,
-        reportBatchItemFailures: true,
-      }),
-    );
-
     eventsTable.grantReadData(healthFn);
     seatsTable.grantReadData(healthFn);
-
-    ordersTable.grantReadWriteData(sagaStarterFn);
-    purchaseSaga.grantStartExecution(sagaStarterFn);
-
-    eventsTable.grantReadData(verifyHoldFn);
-    seatsTable.grantReadData(verifyHoldFn);
-    ordersTable.grantReadData(verifyHoldFn);
-
-    ledgerTable.grantReadWriteData(authorizePaymentFn);
-    ordersTable.grantReadWriteData(authorizePaymentFn);
-
-    seatsTable.grantReadWriteData(confirmSeatFn);
-    seatsTable.grantReadWriteData(releaseSeatFn);
-
-    ledgerTable.grantReadWriteData(capturePaymentFn);
-    ledgerTable.grantReadWriteData(voidAuthorizationFn);
-    ledgerTable.grantReadWriteData(refundPaymentFn);
-
-    ordersTable.grantReadWriteData(issueTicketFn);
-    ordersTable.grantReadWriteData(markConfirmedFn);
-    ordersTable.grantReadWriteData(markFailedFn);
-    ordersTable.grantReadWriteData(markRefundedFn);
 
     const api = new apigateway.RestApi(this, "GateholdApi", {
       restApiName: `gatehold-${stage}`,

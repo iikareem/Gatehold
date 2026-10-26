@@ -1,7 +1,6 @@
 import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
@@ -9,6 +8,7 @@ import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import { Construct } from "constructs";
+import { DataPlane } from "./constructs/data-plane";
 import {
   baseLambdaEnv,
   createNodeFn,
@@ -22,12 +22,11 @@ export interface GateholdStackProps extends cdk.StackProps {
 }
 
 /**
- * Phase 0–6 stack + Phase 7 Slice 0 helpers:
- * Events + Seats + Orders + Idempotency + Ledger,
+ * Phase 0–6 stack + Phase 7 slices 0–1:
+ * DataPlane (tables), helpers for Node Lambdas / saga tasks,
  * health + hold-seat + hold-sweeper + create-order, HTTP API,
  * EventBridge Scheduler → sweeper, order SQS (+ DLQ),
  * purchase saga + saga-starter.
- * Shared NodejsFunction / saga-task defaults live in helpers/.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -39,55 +38,17 @@ export class GateholdStack extends cdk.Stack {
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY;
 
-    const eventsTable = new dynamodb.Table(this, "EventsTable", {
-      tableName: `gatehold-${stage}-events`,
-      partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    const data = new DataPlane(this, "Data", {
+      stage,
       removalPolicy: removal,
     });
-
-    const seatsTable = new dynamodb.Table(this, "SeatsTable", {
-      tableName: `gatehold-${stage}-seats`,
-      partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
-      sortKey: { name: "seatId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
-
-    // Phase 4: Orders + Idempotency + order queue (+ create-order below).
-    const ordersTable = new dynamodb.Table(this, "OrdersTable", {
-      tableName: `gatehold-${stage}-orders`,
-      partitionKey: { name: "orderId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
-    ordersTable.addGlobalSecondaryIndex({
-      indexName: "userId",
-      partitionKey: { name: "userId", type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
-    ordersTable.addGlobalSecondaryIndex({
-      indexName: "eventId-status",
-      partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
-      sortKey: { name: "status", type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
-
-    const idempotencyTable = new dynamodb.Table(this, "IdempotencyTable", {
-      tableName: `gatehold-${stage}-idempotency`,
-      partitionKey: { name: "key", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-      timeToLiveAttribute: "ttl",
-    });
-
-    // Phase 6: append-only payment ledger (pk = provider idempotency key).
-    const ledgerTable = new dynamodb.Table(this, "LedgerTable", {
-      tableName: `gatehold-${stage}-ledger`,
-      partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
+    const {
+      eventsTable,
+      seatsTable,
+      ordersTable,
+      idempotencyTable,
+      ledgerTable,
+    } = data;
 
     const orderDlq = new sqs.Queue(this, "OrderDlq", {
       queueName: `gatehold-${stage}-orders-dlq`,

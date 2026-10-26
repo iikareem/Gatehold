@@ -2,11 +2,11 @@ import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import { Construct } from "constructs";
 import { DataPlane } from "./constructs/data-plane";
 import { HoldCapability } from "./constructs/hold-capability";
+import { OrderAccept } from "./constructs/order-accept";
 import {
   baseLambdaEnv,
   createNodeFn,
@@ -20,10 +20,10 @@ export interface GateholdStackProps extends cdk.StackProps {
 }
 
 /**
- * Phase 0–6 stack + Phase 7 slices 0–2:
- * DataPlane (tables), HoldCapability (hold-seat + sweeper + schedule),
- * helpers for Node Lambdas / saga tasks, health + create-order, HTTP API,
- * order SQS (+ DLQ), purchase saga + saga-starter.
+ * Phase 0–6 stack + Phase 7 slices 0–3:
+ * DataPlane, HoldCapability, OrderAccept (queue/DLQ + create-order),
+ * helpers for Node Lambdas / saga tasks, health, HTTP API,
+ * purchase saga + saga-starter.
  */
 export class GateholdStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GateholdStackProps) {
@@ -47,29 +47,22 @@ export class GateholdStack extends cdk.Stack {
       ledgerTable,
     } = data;
 
-    const orderDlq = new sqs.Queue(this, "OrderDlq", {
-      queueName: `gatehold-${stage}-orders-dlq`,
-      retentionPeriod: cdk.Duration.days(14),
-      removalPolicy: removal,
-    });
-    const orderQueue = new sqs.Queue(this, "OrderQueue", {
-      queueName: `gatehold-${stage}-orders`,
-      // Must exceed saga-starter timeout (SFN start + order update).
-      visibilityTimeout: cdk.Duration.seconds(90),
-      retentionPeriod: cdk.Duration.days(4),
-      removalPolicy: removal,
-      deadLetterQueue: {
-        queue: orderDlq,
-        maxReceiveCount: 5,
-      },
-    });
-
     const holdCapability = new HoldCapability(this, "Holds", {
       stage,
       seatsTable,
       eventsTableName: eventsTable.tableName,
     });
     const { holdSeatFn, holdSweeperFn } = holdCapability;
+
+    const orderAccept = new OrderAccept(this, "Orders", {
+      stage,
+      removalPolicy: removal,
+      eventsTable,
+      seatsTable,
+      ordersTable,
+      idempotencyTable,
+    });
+    const { orderQueue, orderDlq, createOrderFn } = orderAccept;
 
     const lambdaEnv = baseLambdaEnv(stage, {
       eventsTableName: eventsTable.tableName,
@@ -81,18 +74,6 @@ export class GateholdStack extends cdk.Stack {
       name: "health",
       entry: path.join(projectRoot, "services/health/src/handler.ts"),
       environment: lambdaEnv,
-    });
-
-    const createOrderFn = createNodeFn(this, "CreateOrderFn", {
-      stage,
-      name: "create-order",
-      entry: path.join(projectRoot, "services/create-order/src/handler.ts"),
-      environment: {
-        ...lambdaEnv,
-        ORDERS_TABLE_NAME: ordersTable.tableName,
-        IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
-        ORDER_QUEUE_URL: orderQueue.queueUrl,
-      },
     });
 
     // Phase 6 happy path:
@@ -348,12 +329,6 @@ export class GateholdStack extends cdk.Stack {
 
     eventsTable.grantReadData(healthFn);
     seatsTable.grantReadData(healthFn);
-
-    eventsTable.grantReadData(createOrderFn);
-    seatsTable.grantReadWriteData(createOrderFn);
-    ordersTable.grantReadWriteData(createOrderFn);
-    idempotencyTable.grantReadWriteData(createOrderFn);
-    orderQueue.grantSendMessages(createOrderFn);
 
     ordersTable.grantReadWriteData(sagaStarterFn);
     purchaseSaga.grantStartExecution(sagaStarterFn);

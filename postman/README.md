@@ -12,37 +12,44 @@
 
 | Folder | Main request | Purpose |
 |---|---|---|
-| **Health** | Liveness, Get seat | Smoke / inspect seat status |
+| **Health** | Liveness, Get seat | Smoke / inspect seat (`AVAILABLE` → `HELD` → `PAYING` → `SOLD`) |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
-| **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` |
-| **Saga logs** | Filter verify-hold logs | MiniStack CloudWatch `FilterLogEvents` for VerifyHold |
-| **Mock payment** | Authorize → Capture/Void/Refund + Status | Local `go/mock-payment` on `paymentBase` |
+| **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` (saga starts) |
+| **Saga logs** | Filter verify-hold logs | MiniStack CloudWatch for VerifyHold |
+| **Domain events** | stream-relay + OrderConfirmed logs, Get order | Phase 8a/8b observe after confirm |
+| **Mock payment** | Authorize → Capture/Void/Refund + Status | Compose `:8090` (or host `go run`) |
 
 Variants (409, 400, chaos, idempotent retry) are under **Examples** on those requests — not separate top-level calls (except **Authorize (chaos)**).
 
-### Happy path (API Gateway)
+### Happy path (API Gateway + saga + Phase 8)
+
+Prereq: `npm run ministack:up` (MiniStack + StackPort + mock-payment) then deploy + seed.
 
 1. **Holds → Hold seats** (saves `holdId` + `seatIdsJson`)  
-2. **Orders → Accept order** (uses that hold; sets `orderId`)  
-3. **Health → Get seat** (expect `PAYING`)  
-4. **Saga logs → Filter verify-hold logs** (look for `verify-hold ok` in `events[].message`)
+2. **Orders → Accept order** (uses that hold; sets `orderId`; saga runs)  
+3. **Health → Get seat** — expect `PAYING`, then shortly `SOLD`  
+4. **Domain events → Get order** — expect `CONFIRMED`  
+5. **Domain events → Filter stream-relay logs** — `OrderConfirmed published`  
+6. **Domain events → Filter OrderConfirmed logger logs** — bus → logger Lambda artifact  
 
-### Happy path (mock payment)
+Optional: **Saga logs → Filter verify-hold logs** for the saga step itself.
 
-Start the mock first (`cd go && go run ./mock-payment`). Uses `paymentBase` (default `http://127.0.0.1:8090`), not `gatewayBase`.
+### Happy path (mock payment direct)
+
+Uses `paymentBase` (default `http://127.0.0.1:8090`). Compose already exposes this; no separate terminal required.
 
 1. **Mock payment → Health** (`ok: true`)  
 2. **Mock payment → Authorize** (saves `paymentAuthId` + `paymentStatusKey`)  
 3. Either **Capture** (`CAPTURED`) or **Void** (`VOIDED`)  
 4. After Capture: **Refund** (`REFUNDED`)  
-5. **Status** (uses `paymentStatusKey` — any op key: `pay:auth:…`, `pay:capture:…`, …)
+5. **Status** (uses `paymentStatusKey`)
 
 ### Chaos (unknown outcomes)
 
 1. Set env `chaosForce` to `429`, `500`, `502`, `timeout`, or `latency`  
 2. Run **Authorize (chaos)** (sends `X-Chaos-Force`)  
-3. For `timeout`: response body may be empty; run **Status** with `paymentStatusKey` (`pay:auth:{orderId}`)  
-4. For fast local timeout: start mock with `CHAOS_TIMEOUT_MS=1`
+3. For `timeout`: response body may be empty; run **Status** with `paymentStatusKey`  
+4. For fast local timeout: start mock with `CHAOS_TIMEOUT_MS=1` (override compose env if needed)
 
 Also see Examples on **Authorize** for `429` / timeout / missing Content-Type.
 
@@ -53,5 +60,11 @@ Update `gatewayBase`:
 ```bash
 node -e "const id=new URL(require('./.cdk-outputs.json')['Gatehold-dev'].ApiUrl).hostname.split('.')[0]; console.log('http://localhost:4566/_aws/execute-api/'+id+'/dev')"
 ```
+
+Paste into the **Gatehold MiniStack** environment. Log groups / bus names stay:
+
+- `streamRelayLogGroup` = `/aws/lambda/gatehold-dev-stream-relay`
+- `orderConfirmedLoggerLogGroup` = `/aws/lambda/gatehold-dev-order-confirmed-logger`
+- `domainEventBusName` = `gatehold-dev`
 
 Use a free `seatId` (or reset + seed) before Hold seats. Clear `idempotencyKey` in the environment if you want a new key on the next Accept order.

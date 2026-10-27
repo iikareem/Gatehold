@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Saga logs, Mock payment. Variants are under Examples.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING) → Filter verify-hold logs.\\nMock payment: `cd go && go run ./mock-payment` then Health → Authorize → Capture|Void (→ Refund after Capture) → Status. Chaos: set chaosForce and use Authorize (chaos).",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8b: after confirm, Domain events → Filter stream-relay + OrderConfirmed bus logs.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -97,6 +97,24 @@
                 }
               ],
               "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"PAYING\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_…\",\n    \"payUntil\": \"…\"\n  }\n}"
+            },
+            {
+              "name": "200 SOLD (after saga confirm)",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/health?eventId={{eventId}}&seatId={{seatId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"SOLD\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_…\"\n  }\n}"
             },
             {
               "name": "404 missing seat",
@@ -594,6 +612,207 @@
                 }
               ],
               "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"2026-10-24T11:36:12.172Z\\tb82accfa-…\\tINFO\\tverify-hold ok {\\n  orderId: 'ord_…',\\n  eventId: 'evt_001',\\n  holdId: 'h_…',\\n  seatIds: [ 'A-12-21' ]\\n}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/24/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Purchase saga Lambda logs via MiniStack CloudWatch. After Accept order, wait a few seconds then filter."
+    },
+    {
+      "name": "Domain events",
+      "description": "Phase 8a/8b observe after MarkConfirmed. Rule target = logger Lambda (MiniStack EB→CW Logs is broken).",
+      "item": [
+        {
+          "name": "Filter stream-relay logs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.1"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "Logs_20140328.FilterLogEvents"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logGroupName\": \"{{streamRelayLogGroup}}\",\n  \"filterPattern\": \"OrderConfirmed\",\n  \"limit\": 20\n}"
+            },
+            "url": "{{ministackBase}}/",
+            "description": "CloudWatch Logs for gatehold-dev-stream-relay. Expect `OrderConfirmed candidate` then `OrderConfirmed published`."
+          },
+          "response": [
+            {
+              "name": "200 with matches",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-amz-json-1.1"
+                  },
+                  {
+                    "key": "X-Amz-Target",
+                    "value": "Logs_20140328.FilterLogEvents"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"logGroupName\": \"\",\n  \"filterPattern\": \"OrderConfirmed\",\n  \"limit\": 20\n}"
+                },
+                "url": "http://127.0.0.1:4566/"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/x-amz-json-1.1"
+                }
+              ],
+              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed published orderId=ord_… bus=gatehold-dev source=gatehold.orders\\\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+            }
+          ]
+        },
+        {
+          "name": "Filter OrderConfirmed logger logs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.1"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "Logs_20140328.FilterLogEvents"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logGroupName\": \"{{orderConfirmedLoggerLogGroup}}\",\n  \"filterPattern\": \"OrderConfirmed received\",\n  \"limit\": 20\n}"
+            },
+            "url": "{{ministackBase}}/",
+            "description": "EventBridge rule target is order-confirmed-logger Lambda (not CW Logs — MiniStack does not deliver EB→Logs). Expect `OrderConfirmed received` with detail JSON."
+          },
+          "response": [
+            {
+              "name": "200 with matches",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-amz-json-1.1"
+                  },
+                  {
+                    "key": "X-Amz-Target",
+                    "value": "Logs_20140328.FilterLogEvents"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"logGroupName\": \"\",\n  \"filterPattern\": \"OrderConfirmed\",\n  \"limit\": 20\n}"
+                },
+                "url": "http://127.0.0.1:4566/"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/x-amz-json-1.1"
+                }
+              ],
+              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed received {\\\"id\\\":\\\"…\\\",\\\"source\\\":\\\"gatehold.orders\\\",\\\"detail-type\\\":\\\"OrderConfirmed\\\",\\\"detail\\\":{\\\"orderId\\\":\\\"ord_…\\\",\\\"eventId\\\":\\\"evt_001\\\",\\\"userId\\\":\\\"alice\\\",\\\"seatIds\\\":[\\\"A-12-07\\\"],\\\"confirmedAt\\\":\\\"…\\\"}}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+            }
+          ]
+        },
+        {
+          "name": "MiniStack health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{ministackBase}}/_ministack/health",
+            "description": "Emulator readiness. events/dynamodbstreams/logs/sns/sqs/ses should be available for Phase 8."
+          },
+          "response": [
+            {
+              "name": "200 ready",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "http://127.0.0.1:4566/_ministack/health"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"edition\": \"light\",\n  \"version\": \"…\",\n  \"services\": { \"events\": \"available\", \"dynamodbstreams\": \"available\", \"logs\": \"available\" }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get order (DynamoDB)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.0"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "DynamoDB_20120810.GetItem"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TableName\": \"{{ordersTableName}}\",\n  \"Key\": {\n    \"orderId\": { \"S\": \"{{orderId}}\" }\n  }\n}"
+            },
+            "url": "{{ministackBase}}/",
+            "description": "After saga success, status should be CONFIRMED. Uses orderId saved by Accept order."
+          },
+          "response": [
+            {
+              "name": "200 CONFIRMED",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/x-amz-json-1.0"
+                  },
+                  {
+                    "key": "X-Amz-Target",
+                    "value": "DynamoDB_20120810.GetItem"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"TableName\": \"gatehold-dev-orders\",\n  \"Key\": { \"orderId\": { \"S\": \"ord_…\" } }\n}"
+                },
+                "url": "http://127.0.0.1:4566/"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/x-amz-json-1.0"
+                }
+              ],
+              "body": "{\n  \"Item\": {\n    \"orderId\": { \"S\": \"ord_…\" },\n    \"status\": { \"S\": \"CONFIRMED\" },\n    \"eventId\": { \"S\": \"evt_001\" },\n    \"userId\": { \"S\": \"alice\" }\n  }\n}"
             }
           ]
         }

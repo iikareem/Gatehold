@@ -1,10 +1,11 @@
-# Local AWS emulator for Gatehold development and failure tests.
+# Local AWS emulator + observability for Gatehold.
 # https://github.com/ministackorg/ministack
 #
-# Start:  docker compose up -d
-# Health: curl http://localhost:4566/_ministack/health
-# Reset:  curl -X POST http://localhost:4566/_ministack/reset
-# UI:     http://localhost:8080  (StackPort — DynamoDB browser, not a second DB)
+# Start:  npm run ministack:up
+# Health: npm run ministack:health
+# Reset:  npm run ministack:reset
+# UI:     http://localhost:8080  (StackPort)
+# Pay:    http://localhost:8090  (mock-payment; Lambdas use host.docker.internal:8090)
 
 services:
   ministack:
@@ -34,27 +35,39 @@ services:
       start_period: 5s
 
   # ---------------------------------------------------------------------------
-  # DynamoDB UI (and other AWS service browsers) — StackPort
+  # DynamoDB / Lambda / SQS / Logs / Step Functions browser — StackPort
   # https://stackport.cloud/docs/guides/ministack/
   #
-  # This is NOT a second DynamoDB. MiniStack already provides DynamoDB on :4566.
-  # StackPort is only a web console that reads/writes that same emulator.
-  # Open: http://localhost:8080 → DynamoDB → gatehold-dev-seats / gatehold-dev-events
+  # NOT a second DynamoDB. Points at MiniStack on :4566.
+  # Open: http://localhost:8080
   # ---------------------------------------------------------------------------
   stackport:
     image: davireis/stackport:latest
     ports:
       - "8080:8080"
     environment:
-      # Point at the MiniStack service on the compose network (same DynamoDB)
       - AWS_ENDPOINT_URL=http://ministack:4566
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_REGION=us-east-1
       - AWS_DEFAULT_REGION=us-east-1
-      # Faster startup: only probe services we use locally
-      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,apigateway,iam,stepfunctions,logs
+      # Probe services we use locally (Phase 0–8b)
+      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,apigateway,iam,stepfunctions,logs,events,scheduler
     depends_on:
       ministack:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Mock payment (Phase 5+) — required for purchase saga authorize/capture.
+  # Host port 8090; saga Lambdas call http://host.docker.internal:8090
+  # ---------------------------------------------------------------------------
+  mock-payment:
+    build:
+      context: ./go
+      dockerfile: mock-payment/Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      - PORT=8090
     restart: unless-stopped

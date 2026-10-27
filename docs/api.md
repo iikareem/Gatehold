@@ -11,15 +11,17 @@ Contracts / shapes: [`contracts.md`](./contracts.md). Ops / deploy: [`runbook.md
 ## Before you call anything
 
 ```bash
-# 1) MiniStack up (port 4566)
+# 1) Docker: MiniStack :4566 + StackPort :8080 + mock-payment :8090
 npm run ministack:up
 npm run ministack:health
 
-# 2) Env + deploy + seed
+# 2) Env + deploy + seed  (or: npm run local:ready)
 set -a && source .env.example && set +a
 npm run deploy:local
 npm run seed
 ```
+
+Observability while testing: StackPort [http://localhost:8080](http://localhost:8080); Phase 8b logs via runbook (`stream-relay` + `/gatehold/dev/order-confirmed`).
 
 Seed defaults: event `evt_001`, seats `A-12-01` … `A-12-50`, all `AVAILABLE`.
 

@@ -44,7 +44,7 @@ Related docs:
 
 Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
 
-**Next:** Phase 8b — EventBridge bus + `OrderConfirmed` PutEvents (8a stream → relay log is done).
+**Next:** Phase 8c — EventBridge → SNS → SQS (8b bus + PutEvents is done).
 
 ---
 
@@ -374,7 +374,12 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 - Contracts: detail-type `OrderConfirmed`, source `gatehold.orders`
 - Relay `PutEvents`; temporary rule → CloudWatch Logs (or log Lambda)
 
-**Done when:** Confirm produces a visible bus artifact (no SNS/SES required).
+**Verify**
+
+- Confirm order → relay logs `OrderConfirmed published`
+- CloudWatch log group `/gatehold/{stage}/order-confirmed` receives the bus event
+
+**Status:** Done — custom bus `gatehold-{stage}`, PutEvents, logs rule.
 
 ### Slice 8c — SNS → SQS
 
@@ -632,7 +637,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 6 — Purchase saga
 - [x] Phase 7 — CDK composite constructs (infra refactor)
 - [x] Phase 8a — Orders stream + stream-relay (log)
-- [ ] Phase 8b — EventBridge bus + OrderConfirmed
+- [x] Phase 8b — EventBridge bus + OrderConfirmed
 - [ ] Phase 8c — SNS → SQS
 - [ ] Phase 8d — SES email consumer
 - [ ] Phase 9 — Auth, IAM, secrets

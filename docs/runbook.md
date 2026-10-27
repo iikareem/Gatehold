@@ -275,6 +275,17 @@ Inspect relay logs (MiniStack / LocalStack-style):
 aws --endpoint-url "$AWS_ENDPOINT_URL" logs tail /aws/lambda/gatehold-dev-stream-relay --since 10m --format short
 ```
 
+## Phase 8b checklist
+
+- [x] Custom EventBridge bus `gatehold-{stage}` + `OrderConfirmed` contract
+- [x] stream-relay `PutEvents` (source `gatehold.orders`, detail-type `OrderConfirmed`)
+- [x] Rule → CloudWatch Logs `/gatehold/{stage}/order-confirmed`
+- [ ] After confirm: bus artifact in that log group (and relay `OrderConfirmed published`)
+
+```bash
+aws --endpoint-url "$AWS_ENDPOINT_URL" logs tail /gatehold/dev/order-confirmed --since 10m --format short
+```
+
 ## TODO (later)
 
 - Replay refund DLQ

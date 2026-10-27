@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 )
 
-// ConfirmedCandidate is a PENDING→CONFIRMED Orders change (Phase 8a log shape).
+// ConfirmedCandidate is a PENDING→CONFIRMED Orders change.
 type ConfirmedCandidate struct {
 	OrderID  string
 	EventID  string
@@ -17,13 +20,26 @@ type ConfirmedCandidate struct {
 	StreamID string // DynamoDB stream eventID (for log correlation)
 }
 
-// HandleStream filters MODIFY records and logs OrderConfirmed candidates.
-func HandleStream(_ context.Context, event events.DynamoDBEvent) error {
+// HandleStream filters MODIFY records and publishes OrderConfirmed to EventBridge.
+func HandleStream(ctx context.Context, event events.DynamoDBEvent) error {
+	busName := os.Getenv("EVENT_BUS_NAME")
+	source := os.Getenv("EVENT_SOURCE")
+	if source == "" {
+		source = defaultEventSource
+	}
+
+	client, err := newEventBridgeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
 	for _, record := range event.Records {
 		c, ok := confirmedFromRecord(record)
 		if !ok {
 			continue
 		}
+
 		log.Printf(
 			"OrderConfirmed candidate orderId=%s eventId=%s userId=%s seatIds=%s streamEventId=%s",
 			c.OrderID,
@@ -31,6 +47,17 @@ func HandleStream(_ context.Context, event events.DynamoDBEvent) error {
 			c.UserID,
 			strings.Join(c.SeatIDs, ","),
 			c.StreamID,
+		)
+
+		if err := publishOrderConfirmed(ctx, client, busName, source, c, now); err != nil {
+			return fmt.Errorf("orderId=%s: %w", c.OrderID, err)
+		}
+
+		log.Printf(
+			"OrderConfirmed published orderId=%s bus=%s source=%s",
+			c.OrderID,
+			busName,
+			source,
 		)
 	}
 	return nil

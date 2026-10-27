@@ -108,4 +108,10 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "StreamRelayFunctionName", {
     value: domainEvents.streamRelayFn.functionName,
   });
+  new cdk.CfnOutput(stack, "DomainEventBusName", {
+    value: domainEvents.eventBus.eventBusName,
+  });
+  new cdk.CfnOutput(stack, "OrderConfirmedLogGroupName", {
+    value: domainEvents.orderConfirmedLogGroup.logGroupName,
+  });
 }

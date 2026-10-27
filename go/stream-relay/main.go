@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
-// Stream relay — DynamoDB Streams on Orders → domain-event candidates.
-// Phase 8a: log PENDING→CONFIRMED only (no EventBridge yet).
+// Stream relay — DynamoDB Streams on Orders → EventBridge domain events.
+// Phase 8b: PENDING→CONFIRMED → PutEvents OrderConfirmed.
 
 func main() {
 	if os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {

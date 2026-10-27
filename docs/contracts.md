@@ -669,8 +669,34 @@ Never update a ledger row in place. New money outcome = new `pk` / new row (e.g.
 
 Keep TypeScript in sync: `LedgerKind`, `LedgerItem`, `OrderQueueMessage` (saga input), `AuthorizedSagaState`, `TicketedSagaState` in `services/shared/src/types.ts`.
 
+## Phase 8 — EventBridge domain events
+
+Produced by `go/stream-relay` from Orders DynamoDB Streams (`PENDING` → `CONFIRMED`).
+Not emitted from the saga itself.
+
+| Field | Value |
+|---|---|
+| Bus | `gatehold-{stage}` (custom bus, not `default`) |
+| Source | `gatehold.orders` |
+| Detail type | `OrderConfirmed` |
+
+**Detail JSON (`OrderConfirmed`):**
+
+```json
+{
+  "orderId": "ord_…",
+  "eventId": "evt_001",
+  "userId": "fan-…",
+  "seatIds": ["A-12-01"],
+  "confirmedAt": "2026-10-27T15:04:05.000Z"
+}
+```
+
+- `confirmedAt` is set by the relay at publish time (Orders row may not store it yet).
+- Duplicate stream deliveries may `PutEvents` twice; consumers must tolerate duplicates (Phase 8).
+
 ## TODO (later phases)
 
 - SQS message shapes for refund jobs
-- EventBridge detail types (email, audit, analytics)
+- Further EventBridge detail types (`OrderFailed`, `OrderRefunded`, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

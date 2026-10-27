@@ -123,4 +123,7 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "OrderNotificationsDlqUrl", {
     value: domainEvents.orderNotificationsDlq.queueUrl,
   });
+  new cdk.CfnOutput(stack, "NotifyEmailFunctionName", {
+    value: domainEvents.notifyEmailFn.functionName,
+  });
 }

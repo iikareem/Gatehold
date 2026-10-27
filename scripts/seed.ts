@@ -69,6 +69,13 @@ async function main(): Promise<void> {
     );
   }
 
+  // Phase 8d: SES sandbox / MiniStack reject unverified From (and often To).
+  const sesFrom = optionalEnv("SES_FROM_EMAIL", "noreply@gatehold.local");
+  const sesVerified = await verifySesEmails([
+    sesFrom,
+    "alice@fans.gatehold.local",
+  ]);
+
   console.log(
     JSON.stringify(
       {
@@ -77,12 +84,40 @@ async function main(): Promise<void> {
         seats: SEAT_COUNT,
         sampleSeatId: formatSeatId(SECTION, ROW, 1),
         tables: { events: eventsTable, seats: seatsTable },
+        sesVerified,
         endpoint: process.env.AWS_ENDPOINT_URL || "(default AWS)",
       },
       null,
       2,
     ),
   );
+}
+
+/** Best-effort VerifyEmailIdentity against MiniStack (no-op / skip if no endpoint). */
+async function verifySesEmails(addresses: string[]): Promise<string[]> {
+  const endpoint = process.env.AWS_ENDPOINT_URL;
+  if (!endpoint) {
+    return [];
+  }
+  const verified: string[] = [];
+  for (const email of addresses) {
+    const body = new URLSearchParams({
+      Action: "VerifyEmailIdentity",
+      Version: "2010-12-01",
+      EmailAddress: email,
+    });
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`SES VerifyEmailIdentity ${email}: ${res.status} ${text}`);
+    }
+    verified.push(email);
+  }
+  return verified;
 }
 
 main().catch((err) => {

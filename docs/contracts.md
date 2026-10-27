@@ -703,7 +703,24 @@ Not emitted from the saga itself.
 | SQS queue | `gatehold-{stage}-order-notifications` |
 | DLQ | `gatehold-{stage}-order-notifications-dlq` |
 
-EventBridge rule `gatehold-{stage}-order-confirmed-sns` matches the same `OrderConfirmed` pattern and targets the SNS topic. SNS delivers to SQS (raw delivery off): the SQS body is an SNS envelope whose `Message` field is the EventBridge event JSON (`source`, `detail-type`, `detail`, …). No Lambda drains this queue until Slice 8d.
+EventBridge rule `gatehold-{stage}-order-confirmed-sns` matches the same `OrderConfirmed` pattern and targets the SNS topic. SNS delivers to SQS (raw delivery off): the SQS body is an SNS envelope whose `Message` field is the EventBridge event JSON (`source`, `detail-type`, `detail`, …).
+
+### Notify email (Slice 8d)
+
+| Resource | Name |
+|---|---|
+| Lambda | `gatehold-{stage}-notify-email` (Go) |
+| Trigger | SQS `gatehold-{stage}-order-notifications` |
+
+Parses SNS envelope → EventBridge `OrderConfirmed` detail → SES `SendEmail`:
+
+- **From:** `SES_FROM_EMAIL` (default `noreply@gatehold.local`)
+- **To:** `{userId}@fans.gatehold.local` (or `SES_TO_EMAIL` override) — Phase 8 has no real fan inbox
+- **Subject:** `Order confirmed: {orderId}`
+
+SES sandbox / MiniStack require verified identities: `notify-email` calls `VerifyEmailIdentity` for From+To before `SendEmail` (idempotent locally). Seed also verifies `noreply@gatehold.local` and `alice@fans.gatehold.local`.
+
+Local inspect: `GET /_ministack/ses/messages`. Saga still never calls SES. Duplicate stream deliveries may send twice (ok for Phase 8).
 
 ## TODO (later phases)
 

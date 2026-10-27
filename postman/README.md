@@ -16,7 +16,7 @@
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` (saga starts) |
 | **Saga logs** | Filter verify-hold logs | MiniStack CloudWatch for VerifyHold |
-| **Domain events** | stream-relay + logger logs, notify SQS, Get order | Phase 8 observe after confirm |
+| **Domain events** | stream-relay + logger + SES messages, Get order | Phase 8 observe after confirm |
 | **Mock payment** | Authorize → Capture/Void/Refund + Status | Compose `:8090` (or host `go run`) |
 
 Variants (409, 400, chaos, idempotent retry) are under **Examples** on those requests — not separate top-level calls (except **Authorize (chaos)**).
@@ -31,7 +31,8 @@ Prereq: `npm run ministack:up` (MiniStack + StackPort + mock-payment) then deplo
 4. **Domain events → Get order** — expect `CONFIRMED`  
 5. **Domain events → Filter stream-relay logs** — `OrderConfirmed published`  
 6. **Domain events → Filter OrderConfirmed logger logs** — bus → logger Lambda artifact  
-7. **Domain events → List notify SQS messages** — SNS → `gatehold-dev-order-notifications`  
+7. **Domain events → List SES messages** — notify-email → MiniStack SES artifact  
+8. Optional: **Filter notify-email logs** — `OrderConfirmed email sent`  
 
 Optional: **Saga logs → Filter verify-hold logs** for the saga step itself.
 
@@ -68,5 +69,6 @@ Paste into the **Gatehold MiniStack** environment. Log groups / bus names stay:
 - `orderConfirmedLoggerLogGroup` = `/aws/lambda/gatehold-dev-order-confirmed-logger`
 - `domainEventBusName` = `gatehold-dev`
 - `orderNotificationsQueueName` / topic = `gatehold-dev-order-notifications`
+- `notifyEmailLogGroup` = `/aws/lambda/gatehold-dev-notify-email`
 
 Use a free `seatId` (or reset + seed) before Hold seats. Clear `idempotencyKey` in the environment if you want a new key on the next Accept order.

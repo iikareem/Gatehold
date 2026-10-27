@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8: after confirm, Domain events → stream-relay + logger logs + List notify SQS messages.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8: after confirm, Domain events → stream-relay + logger + List SES messages.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -620,7 +620,7 @@
     },
     {
       "name": "Domain events",
-      "description": "Phase 8 observe after MarkConfirmed: stream-relay → EventBridge → logger Lambda (8b) + SNS → notify SQS (8c). MiniStack EB→CW Logs targets do not deliver.",
+      "description": "Phase 8 observe after MarkConfirmed: stream-relay → EventBridge → logger (8b) → SNS → SQS → notify-email → SES (8c/8d). MiniStack EB→CW Logs targets do not deliver.",
       "item": [
         {
           "name": "Filter stream-relay logs",
@@ -738,11 +738,11 @@
             "method": "GET",
             "header": [],
             "url": "{{ministackBase}}/_ministack/sqs/messages",
-            "description": "Phase 8c — after confirm, expect a message on gatehold-dev-order-notifications (SNS envelope; Message = EventBridge OrderConfirmed JSON). Order accept queue may also appear. No consumer until 8d."
+            "description": "Phase 8c/8d — notify queue is drained by notify-email. Usually empty after success; check List SES messages instead. DLQ if SendEmail keeps failing."
           },
           "response": [
             {
-              "name": "200 with notify message",
+              "name": "200 queues",
               "originalRequest": {
                 "method": "GET",
                 "header": [],
@@ -757,7 +757,59 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"messages\": [\n    {\n      \"queueUrl\": \"…/gatehold-dev-order-notifications\",\n      \"body\": \"{\\\"Type\\\":\\\"Notification\\\",\\\"Message\\\":\\\"{\\\\\\\"source\\\\\\\":\\\\\\\"gatehold.orders\\\\\\\",\\\\\\\"detail-type\\\\\\\":\\\\\\\"OrderConfirmed\\\\\\\",\\\\\\\"detail\\\\\\\":{…}}\\\"}\"\n    }\n  ]\n}"
+              "body": "{\n  \"messages\": {\n    \"000000000000\": {\n      \"us-east-1\": {\n        \"http://localhost:4566/000000000000/gatehold-dev-order-notifications\": []\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Filter notify-email logs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.1"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "Logs_20140328.FilterLogEvents"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logGroupName\": \"{{notifyEmailLogGroup}}\",\n  \"filterPattern\": \"OrderConfirmed email sent\",\n  \"limit\": 20\n}"
+            },
+            "url": "{{ministackBase}}/",
+            "description": "Phase 8d — Go notify-email after SES SendEmail. Expect `OrderConfirmed email sent orderId=…`."
+          },
+          "response": []
+        },
+        {
+          "name": "List SES messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{ministackBase}}/_ministack/ses/messages",
+            "description": "Phase 8d — MiniStack SES artifact after confirm. Expect From noreply@gatehold.local, To {userId}@fans.gatehold.local, subject Order confirmed: …"
+          },
+          "response": [
+            {
+              "name": "200 with email",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "http://127.0.0.1:4566/_ministack/ses/messages"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"messages\": [\n    {\n      \"Source\": \"noreply@gatehold.local\",\n      \"Destination\": { \"ToAddresses\": [\"alice@fans.gatehold.local\"] },\n      \"Subject\": \"Order confirmed: ord_…\"\n    }\n  ]\n}"
             }
           ]
         },

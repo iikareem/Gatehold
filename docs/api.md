@@ -21,7 +21,7 @@ npm run deploy:local
 npm run seed
 ```
 
-Observability while testing: StackPort [http://localhost:8080](http://localhost:8080); Phase 8 via runbook (`stream-relay` + order-confirmed-logger + `/_ministack/sqs/messages` for notify queue).
+Observability while testing: StackPort [http://localhost:8080](http://localhost:8080); Phase 8 via runbook (`stream-relay` → logger → SNS/SQS → notify-email → `/_ministack/ses/messages`).
 
 Seed defaults: event `evt_001`, seats `A-12-01` … `A-12-50`, all `AVAILABLE`.
 

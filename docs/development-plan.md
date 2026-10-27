@@ -44,7 +44,7 @@ Related docs:
 
 Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
 
-**Next:** Phase 8d — SQS → notify-email → SES (8c SNS → SQS is done).
+**Next:** Phase 9 — Auth, IAM, and secrets (Phase 8 domain events complete).
 
 ---
 
@@ -401,11 +401,13 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Build**
 
-- SQS → notify-email Lambda → SES
+- SQS → Go `notify-email` Lambda → SES `SendEmail`
 - Runbook: `/_ministack/ses/messages` after confirm
 - Document: duplicate stream deliveries may enqueue twice (ok for Phase 8)
 
 **Done when:** Confirm produces a visible SES artifact; saga still has no SES calls.
+
+**Status:** Done — `gatehold-{stage}-notify-email` drains notify SQS; MiniStack SES inspect.
 
 **Learn (whole Phase 8)**
 
@@ -642,7 +644,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 8a — Orders stream + stream-relay (log)
 - [x] Phase 8b — EventBridge bus + OrderConfirmed
 - [x] Phase 8c — SNS → SQS
-- [ ] Phase 8d — SES email consumer
+- [x] Phase 8d — SES email consumer
 - [ ] Phase 9 — Auth, IAM, secrets
 - [ ] Phase 10 — Signed tickets
 - [ ] Phase 11 — Cancellation and mass refunds

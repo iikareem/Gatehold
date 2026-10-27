@@ -109,7 +109,7 @@ npm run ministack:up
 npm run deploy:local    # cdklocal bootstrap + deploy → writes .cdk-outputs.json
 ```
 
-Deploys Events, Seats, **Orders** (with stream), **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga, **DomainEvents** (stream-relay + EventBridge bus + OrderConfirmed → logger Lambda + SNS → notify SQS), and `POST /orders`. Payment steps call mock-payment on `:8090` (compose service, or host `go run`) via `host.docker.internal:8090`.
+Deploys Events, Seats, **Orders** (with stream), **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga, **DomainEvents** (stream-relay → EventBridge → logger + SNS → notify SQS → **notify-email** → SES), and `POST /orders`. Payment steps call mock-payment on `:8090` (compose service, or host `go run`) via `host.docker.internal:8090`.
 
 ### Seed event + seats
 
@@ -319,9 +319,9 @@ With env sourced (`set -a && source .env.example && set +a`):
 # 2) EventBridge rule invoked order-confirmed-logger
 #    log group: /aws/lambda/gatehold-dev-order-confirmed-logger  (filter: OrderConfirmed received)
 
-# 3) OrderConfirmed fan-out on notify SQS (SNS → SQS; no consumer until 8d)
-#    curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
-#    look for queue gatehold-dev-order-notifications (SNS envelope → EventBridge JSON)
+# 3) OrderConfirmed fan-out (SNS → SQS → notify-email → SES)
+#    curl -sS http://localhost:4566/_ministack/ses/messages | jq .
+#    log group: /aws/lambda/gatehold-dev-notify-email  (filter: OrderConfirmed email sent)
 
 # 4) Order row CONFIRMED — Postman Domain events → Get order, or StackPort DynamoDB
 ```
@@ -332,14 +332,22 @@ With env sourced (`set -a && source .env.example && set +a`):
 - [x] SQS `gatehold-{stage}-order-notifications` + DLQ (maxReceiveCount 5)
 - [x] EventBridge rule `order-confirmed-sns` → SNS (same `OrderConfirmed` pattern as 8b logger rule)
 - [x] Outputs: `OrderNotificationsTopicArn`, `OrderNotificationsQueueUrl`, `OrderNotificationsDlqUrl`
-- [ ] After confirm: notify queue shows a message via `/_ministack/sqs/messages` (or Postman Domain events → List notify SQS messages)
+- [ ] After confirm: notify queue briefly receives a message (drained by 8d)
 
-MiniStack inspect helpers (also useful for 8d SES):
+## Phase 8d checklist
+
+- [x] Go `notify-email` Lambda + `npm run build:notify-email`
+- [x] SQS event source on notify queue (`reportBatchItemFailures`)
+- [x] SES `SendEmail` (from `noreply@gatehold.local`, to `{userId}@fans.gatehold.local`; verifies identities first)
+- [x] Output: `NotifyEmailFunctionName`
+- [ ] After confirm: `/_ministack/ses/messages` shows the email (or Postman Domain events → List SES messages)
+
+MiniStack inspect helpers:
 
 ```bash
 curl -sS http://localhost:4566/_ministack/health | jq .
 curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
-curl -sS http://localhost:4566/_ministack/ses/messages | jq .   # empty until 8d
+curl -sS http://localhost:4566/_ministack/ses/messages | jq .
 ```
 
 ## TODO (later)

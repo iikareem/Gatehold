@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as sns from "aws-cdk-lib/aws-sns";
@@ -33,11 +34,12 @@ export interface DomainEventsProps {
  * 8b: PutEvents on custom bus + OrderConfirmed → log Lambda
  *     (MiniStack does not deliver EventBridge → CloudWatch Logs reliably).
  * 8c: OrderConfirmed → SNS → SQS (+ DLQ); inspect via MiniStack SQS.
- * Later: SQS → notify-email → SES (8d).
+ * 8d: SQS → Go notify-email → SES (MiniStack: /_ministack/ses/messages).
  */
 export class DomainEvents extends Construct {
   readonly streamRelayFn: lambda.IFunction;
   readonly orderConfirmedLoggerFn: lambda.IFunction;
+  readonly notifyEmailFn: lambda.IFunction;
   readonly eventBus: events.IEventBus;
   readonly orderNotificationsTopic: sns.ITopic;
   readonly orderNotificationsQueue: sqs.IQueue;
@@ -77,7 +79,7 @@ export class DomainEvents extends Construct {
       targets: [new targets.LambdaFunction(this.orderConfirmedLoggerFn)],
     });
 
-    // Slice 8c: bus → SNS → SQS (+ DLQ). No consumer until 8d.
+    // Slice 8c: bus → SNS → SQS (+ DLQ).
     this.orderNotificationsDlq = new sqs.Queue(this, "OrderNotificationsDlq", {
       queueName: `gatehold-${stage}-order-notifications-dlq`,
       retentionPeriod: cdk.Duration.days(14),
@@ -89,7 +91,7 @@ export class DomainEvents extends Construct {
       "OrderNotificationsQueue",
       {
         queueName: `gatehold-${stage}-order-notifications`,
-        // 8d notify-email will drain this; keep headroom above Lambda timeout.
+        // Must exceed notify-email timeout.
         visibilityTimeout: cdk.Duration.seconds(60),
         retentionPeriod: cdk.Duration.days(4),
         removalPolicy,
@@ -123,6 +125,44 @@ export class DomainEvents extends Construct {
       },
       targets: [new targets.SnsTopic(this.orderNotificationsTopic)],
     });
+
+    // Slice 8d: SQS → Go notify-email → SES.
+    this.notifyEmailFn = createGoFn(this, "NotifyEmailFn", {
+      stage,
+      name: "notify-email",
+      zipPath: path.join(projectRoot, "go/notify-email/dist/notify-email.zip"),
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        STAGE: stage,
+        SES_FROM_EMAIL: "noreply@gatehold.local",
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
+    });
+
+    this.notifyEmailFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+          // MiniStack / SES sandbox require verified From+To identities.
+          "ses:VerifyEmailIdentity",
+        ],
+        resources: ["*"],
+      }),
+    );
+
+    this.notifyEmailFn.addEventSource(
+      new sources.SqsEventSource(this.orderNotificationsQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true,
+      }),
+    );
 
     this.streamRelayFn = createGoFn(this, "StreamRelayFn", {
       stage,

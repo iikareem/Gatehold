@@ -109,7 +109,7 @@ npm run ministack:up
 npm run deploy:local    # cdklocal bootstrap + deploy → writes .cdk-outputs.json
 ```
 
-Deploys Events, Seats, **Orders** (with stream), **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga, **DomainEvents** (stream-relay + EventBridge bus + OrderConfirmed → logs), and `POST /orders`. Payment steps call mock-payment on `:8090` (compose service, or host `go run`) via `host.docker.internal:8090`.
+Deploys Events, Seats, **Orders** (with stream), **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga, **DomainEvents** (stream-relay + EventBridge bus + OrderConfirmed → logger Lambda + SNS → notify SQS), and `POST /orders`. Payment steps call mock-payment on `:8090` (compose service, or host `go run`) via `host.docker.internal:8090`.
 
 ### Seed event + seats
 
@@ -319,10 +319,22 @@ With env sourced (`set -a && source .env.example && set +a`):
 # 2) EventBridge rule invoked order-confirmed-logger
 #    log group: /aws/lambda/gatehold-dev-order-confirmed-logger  (filter: OrderConfirmed received)
 
-# 3) Order row CONFIRMED — Postman Domain events → Get order, or StackPort DynamoDB
+# 3) OrderConfirmed fan-out on notify SQS (SNS → SQS; no consumer until 8d)
+#    curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
+#    look for queue gatehold-dev-order-notifications (SNS envelope → EventBridge JSON)
+
+# 4) Order row CONFIRMED — Postman Domain events → Get order, or StackPort DynamoDB
 ```
 
-MiniStack inspect helpers (also useful later for 8c/8d):
+## Phase 8c checklist
+
+- [x] SNS topic `gatehold-{stage}-order-notifications`
+- [x] SQS `gatehold-{stage}-order-notifications` + DLQ (maxReceiveCount 5)
+- [x] EventBridge rule `order-confirmed-sns` → SNS (same `OrderConfirmed` pattern as 8b logger rule)
+- [x] Outputs: `OrderNotificationsTopicArn`, `OrderNotificationsQueueUrl`, `OrderNotificationsDlqUrl`
+- [ ] After confirm: notify queue shows a message via `/_ministack/sqs/messages` (or Postman Domain events → List notify SQS messages)
+
+MiniStack inspect helpers (also useful for 8d SES):
 
 ```bash
 curl -sS http://localhost:4566/_ministack/health | jq .

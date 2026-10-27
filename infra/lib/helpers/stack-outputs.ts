@@ -114,4 +114,13 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "OrderConfirmedLoggerFunctionName", {
     value: domainEvents.orderConfirmedLoggerFn.functionName,
   });
+  new cdk.CfnOutput(stack, "OrderNotificationsTopicArn", {
+    value: domainEvents.orderNotificationsTopic.topicArn,
+  });
+  new cdk.CfnOutput(stack, "OrderNotificationsQueueUrl", {
+    value: domainEvents.orderNotificationsQueue.queueUrl,
+  });
+  new cdk.CfnOutput(stack, "OrderNotificationsDlqUrl", {
+    value: domainEvents.orderNotificationsDlq.queueUrl,
+  });
 }

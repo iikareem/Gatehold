@@ -695,6 +695,16 @@ Not emitted from the saga itself.
 - `confirmedAt` is set by the relay at publish time (Orders row may not store it yet).
 - Duplicate stream deliveries may `PutEvents` twice; consumers must tolerate duplicates (Phase 8).
 
+### Notify fan-out (Slice 8c)
+
+| Resource | Name |
+|---|---|
+| SNS topic | `gatehold-{stage}-order-notifications` |
+| SQS queue | `gatehold-{stage}-order-notifications` |
+| DLQ | `gatehold-{stage}-order-notifications-dlq` |
+
+EventBridge rule `gatehold-{stage}-order-confirmed-sns` matches the same `OrderConfirmed` pattern and targets the SNS topic. SNS delivers to SQS (raw delivery off): the SQS body is an SNS envelope whose `Message` field is the EventBridge event JSON (`source`, `detail-type`, `detail`, …). No Lambda drains this queue until Slice 8d.
+
 ## TODO (later phases)
 
 - SQS message shapes for refund jobs

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8b: after confirm, Domain events → Filter stream-relay + OrderConfirmed bus logs.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8: after confirm, Domain events → stream-relay + logger logs + List notify SQS messages.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -620,7 +620,7 @@
     },
     {
       "name": "Domain events",
-      "description": "Phase 8a/8b observe after MarkConfirmed. Rule target = logger Lambda (MiniStack EB→CW Logs is broken).",
+      "description": "Phase 8 observe after MarkConfirmed: stream-relay → EventBridge → logger Lambda (8b) + SNS → notify SQS (8c). MiniStack EB→CW Logs targets do not deliver.",
       "item": [
         {
           "name": "Filter stream-relay logs",
@@ -729,6 +729,35 @@
                 }
               ],
               "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed received {\\\"id\\\":\\\"…\\\",\\\"source\\\":\\\"gatehold.orders\\\",\\\"detail-type\\\":\\\"OrderConfirmed\\\",\\\"detail\\\":{\\\"orderId\\\":\\\"ord_…\\\",\\\"eventId\\\":\\\"evt_001\\\",\\\"userId\\\":\\\"alice\\\",\\\"seatIds\\\":[\\\"A-12-07\\\"],\\\"confirmedAt\\\":\\\"…\\\"}}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+            }
+          ]
+        },
+        {
+          "name": "List notify SQS messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{ministackBase}}/_ministack/sqs/messages",
+            "description": "Phase 8c — after confirm, expect a message on gatehold-dev-order-notifications (SNS envelope; Message = EventBridge OrderConfirmed JSON). Order accept queue may also appear. No consumer until 8d."
+          },
+          "response": [
+            {
+              "name": "200 with notify message",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "http://127.0.0.1:4566/_ministack/sqs/messages"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"messages\": [\n    {\n      \"queueUrl\": \"…/gatehold-dev-order-notifications\",\n      \"body\": \"{\\\"Type\\\":\\\"Notification\\\",\\\"Message\\\":\\\"{\\\\\\\"source\\\\\\\":\\\\\\\"gatehold.orders\\\\\\\",\\\\\\\"detail-type\\\\\\\":\\\\\\\"OrderConfirmed\\\\\\\",\\\\\\\"detail\\\\\\\":{…}}\\\"}\"\n    }\n  ]\n}"
             }
           ]
         },

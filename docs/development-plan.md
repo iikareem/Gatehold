@@ -44,7 +44,7 @@ Related docs:
 
 Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
 
-**Next:** Phase 8c — EventBridge → SNS → SQS (8b bus + PutEvents is done).
+**Next:** Phase 8d — SQS → notify-email → SES (8c SNS → SQS is done).
 
 ---
 
@@ -393,6 +393,8 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Done when:** Confirm → message on notify queue via `/_ministack/sqs/messages`.
 
+**Status:** Done — topic `gatehold-{stage}-order-notifications`, queue + DLQ, rule `order-confirmed-sns`.
+
 ### Slice 8d — SES email consumer
 
 **Goal:** End-to-end notification without SES in the saga.
@@ -639,7 +641,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 7 — CDK composite constructs (infra refactor)
 - [x] Phase 8a — Orders stream + stream-relay (log)
 - [x] Phase 8b — EventBridge bus + OrderConfirmed
-- [ ] Phase 8c — SNS → SQS
+- [x] Phase 8c — SNS → SQS
 - [ ] Phase 8d — SES email consumer
 - [ ] Phase 9 — Auth, IAM, secrets
 - [ ] Phase 10 — Signed tickets

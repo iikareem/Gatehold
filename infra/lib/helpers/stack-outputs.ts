@@ -111,7 +111,7 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "DomainEventBusName", {
     value: domainEvents.eventBus.eventBusName,
   });
-  new cdk.CfnOutput(stack, "OrderConfirmedLogGroupName", {
-    value: domainEvents.orderConfirmedLogGroup.logGroupName,
+  new cdk.CfnOutput(stack, "OrderConfirmedLoggerFunctionName", {
+    value: domainEvents.orderConfirmedLoggerFn.functionName,
   });
 }

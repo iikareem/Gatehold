@@ -55,12 +55,29 @@ CDK turns that infra into **CloudFormation**. Where CloudFormation runs depends 
 
 Gatehold uses [MiniStack](https://github.com/ministackorg/ministack) as the local AWS emulator (DynamoDB, Lambda, SQS, Step Functions, EventBridge, etc. on port `4566`).
 
-### Start
+### Start (emulator + UI + mock payment)
+
+`docker compose` brings up three services:
+
+| Service | Port | Role |
+|---|---|---|
+| **ministack** | `4566` | Local AWS (DynamoDB, Lambda, SQS, Step Functions, EventBridge, Logs, …) |
+| **stackport** | `8080` | Browser UI over that emulator |
+| **mock-payment** | `8090` | Payment provider for the purchase saga |
 
 ```bash
-npm run ministack:up
+npm run ministack:up      # compose up --build (includes mock-payment image)
 npm run ministack:health
+curl -sS http://127.0.0.1:8090/health || curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8090/
 ```
+
+One-shot after Docker is running (up + deploy + seed):
+
+```bash
+npm run local:ready
+```
+
+You no longer need a separate `go run ./mock-payment` terminal for local saga tests — compose owns `:8090`. Host-side `go run` still works if you stop the compose service.
 
 ### DynamoDB UI (StackPort)
 
@@ -70,6 +87,9 @@ Compose also starts **StackPort** on port `8080`. It is a browser UI only — **
 npm run ministack:ui
 # open http://localhost:8080
 # DynamoDB → gatehold-dev-events / seats / orders / idempotency / ledger (after deploy + seed)
+# Lambda → gatehold-dev-stream-relay (invoke logs)
+# Step Functions → purchase saga executions
+# Logs → /aws/lambda/… including stream-relay + order-confirmed-logger (Phase 8b)
 ```
 
 ### Load local env
@@ -89,7 +109,7 @@ npm run ministack:up
 npm run deploy:local    # cdklocal bootstrap + deploy → writes .cdk-outputs.json
 ```
 
-Deploys Events, Seats, **Orders**, **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga (`VerifyHold` → `AuthorizePayment` → `ConfirmSeat` → `CapturePayment` → `IssueTicket` → `MarkConfirmed` → Succeed; auth fail → `ReleaseSeat` → `MarkFailed`; confirm/capture fail → `VoidAuthorization` → same ReleaseSeat tail → SagaCompensated; issue/mark-confirmed fail → `RefundPayment` → ReleaseSeat → `MarkRefunded` → SagaCompensated), and `POST /orders`. For payment steps, run mock payment on the host (`cd go && go run ./mock-payment`) — Lambdas reach it via `host.docker.internal:8090`.
+Deploys Events, Seats, **Orders** (with stream), **Idempotency**, **Ledger**, order SQS (+ DLQ), health / hold-seat / hold-sweeper / **create-order**, **saga-starter** + purchase saga, **DomainEvents** (stream-relay + EventBridge bus + OrderConfirmed → logs), and `POST /orders`. Payment steps call mock-payment on `:8090` (compose service, or host `go run`) via `host.docker.internal:8090`.
 
 ### Seed event + seats
 
@@ -279,11 +299,35 @@ aws --endpoint-url "$AWS_ENDPOINT_URL" logs tail /aws/lambda/gatehold-dev-stream
 
 - [x] Custom EventBridge bus `gatehold-{stage}` + `OrderConfirmed` contract
 - [x] stream-relay `PutEvents` (source `gatehold.orders`, detail-type `OrderConfirmed`)
-- [x] Rule → CloudWatch Logs `/gatehold/{stage}/order-confirmed`
-- [ ] After confirm: bus artifact in that log group (and relay `OrderConfirmed published`)
+- [x] Rule → `order-confirmed-logger` Lambda (MiniStack does **not** deliver EventBridge → CloudWatch Logs targets reliably; StackPort may show the rule without a working arrow)
+- [ ] After confirm: logger logs `OrderConfirmed received` (and relay `OrderConfirmed published`)
 
 ```bash
-aws --endpoint-url "$AWS_ENDPOINT_URL" logs tail /gatehold/dev/order-confirmed --since 10m --format short
+# via Postman Domain events → Filter OrderConfirmed logger logs
+# or AWS CLI / SDK against:
+#   /aws/lambda/gatehold-dev-order-confirmed-logger
+```
+
+### Phase 8 local observe (after confirm)
+
+With env sourced (`set -a && source .env.example && set +a`):
+
+```bash
+# 1) stream-relay saw the confirm and PutEvents
+#    log group: /aws/lambda/gatehold-dev-stream-relay  (filter: OrderConfirmed)
+
+# 2) EventBridge rule invoked order-confirmed-logger
+#    log group: /aws/lambda/gatehold-dev-order-confirmed-logger  (filter: OrderConfirmed received)
+
+# 3) Order row CONFIRMED — Postman Domain events → Get order, or StackPort DynamoDB
+```
+
+MiniStack inspect helpers (also useful later for 8c/8d):
+
+```bash
+curl -sS http://localhost:4566/_ministack/health | jq .
+curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
+curl -sS http://localhost:4566/_ministack/ses/messages | jq .   # empty until 8d
 ```
 
 ## TODO (later)

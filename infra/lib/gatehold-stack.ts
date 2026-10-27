@@ -62,7 +62,6 @@ export class GateholdStack extends cdk.Stack {
 
     const domainEvents = new DomainEvents(this, "DomainEvents", {
       stage,
-      removalPolicy,
       ordersTable: data.ordersTable,
     });
 

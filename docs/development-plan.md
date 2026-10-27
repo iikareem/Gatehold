@@ -372,14 +372,15 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 - Custom EventBridge bus in `DomainEvents`
 - Contracts: detail-type `OrderConfirmed`, source `gatehold.orders`
-- Relay `PutEvents`; temporary rule → CloudWatch Logs (or log Lambda)
+- Relay `PutEvents`; temporary rule → **log Lambda** (`order-confirmed-logger`)
+  - Prefer Lambda over CloudWatch Logs target: MiniStack accepts the CW Logs target in the API but does not deliver events into the log group
 
 **Verify**
 
 - Confirm order → relay logs `OrderConfirmed published`
-- CloudWatch log group `/gatehold/{stage}/order-confirmed` receives the bus event
+- Logger Lambda logs `OrderConfirmed received` with the contract detail
 
-**Status:** Done — custom bus `gatehold-{stage}`, PutEvents, logs rule.
+**Status:** Done — custom bus `gatehold-{stage}`, PutEvents, logger Lambda rule.
 
 ### Slice 8c — SNS → SQS
 

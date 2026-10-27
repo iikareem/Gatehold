@@ -5,10 +5,10 @@ import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sources from "aws-cdk-lib/aws-lambda-event-sources";
-import * as logs from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
 import {
   createGoFn,
+  createNodeFn,
   dockerReachableEndpoint,
   projectRoot,
 } from "../helpers/node-fn";
@@ -18,7 +18,6 @@ export const ORDERS_EVENT_SOURCE = "gatehold.orders";
 
 export interface DomainEventsProps {
   stage: string;
-  removalPolicy: cdk.RemovalPolicy;
   /** Orders table must have a stream (NEW_AND_OLD_IMAGES). */
   ordersTable: dynamodb.ITable;
 }
@@ -27,43 +26,47 @@ export interface DomainEventsProps {
  * Phase 8 domain-events plane.
  *
  * 8a: Orders stream → Go stream-relay (filter PENDING→CONFIRMED).
- * 8b: PutEvents on custom bus + OrderConfirmed → CloudWatch Logs rule.
+ * 8b: PutEvents on custom bus + OrderConfirmed → log Lambda
+ *     (MiniStack does not deliver EventBridge → CloudWatch Logs reliably).
  * Later: SNS / SQS / SES targets — not in GateholdStack.
  */
 export class DomainEvents extends Construct {
   readonly streamRelayFn: lambda.IFunction;
+  readonly orderConfirmedLoggerFn: lambda.IFunction;
   readonly eventBus: events.IEventBus;
-  readonly orderConfirmedLogGroup: logs.ILogGroup;
 
   constructor(scope: Construct, id: string, props: DomainEventsProps) {
     super(scope, id);
 
-    const { stage, removalPolicy, ordersTable } = props;
+    const { stage, ordersTable } = props;
 
     this.eventBus = new events.EventBus(this, "DomainBus", {
       eventBusName: `gatehold-${stage}`,
     });
 
-    // Slice 8b visibility: bus → logs (no SNS/SES yet).
-    this.orderConfirmedLogGroup = new logs.LogGroup(
-      this,
-      "OrderConfirmedLogGroup",
-      {
-        logGroupName: `/gatehold/${stage}/order-confirmed`,
-        retention: logs.RetentionDays.ONE_WEEK,
-        removalPolicy,
+    // Slice 8b visibility: bus → Lambda (works on MiniStack; CW Logs target does not).
+    this.orderConfirmedLoggerFn = createNodeFn(this, "OrderConfirmedLoggerFn", {
+      stage,
+      name: "order-confirmed-logger",
+      entry: path.join(
+        projectRoot,
+        "services/order-confirmed-logger/src/handler.ts",
+      ),
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        STAGE: stage,
       },
-    );
+    });
 
-    new events.Rule(this, "OrderConfirmedToLogs", {
+    new events.Rule(this, "OrderConfirmedToLogger", {
       eventBus: this.eventBus,
-      ruleName: `gatehold-${stage}-order-confirmed-logs`,
-      description: "Phase 8b — inspect OrderConfirmed on the bus",
+      ruleName: `gatehold-${stage}-order-confirmed-logger`,
+      description: "Phase 8b — inspect OrderConfirmed via Lambda logs",
       eventPattern: {
         source: [ORDERS_EVENT_SOURCE],
         detailType: ["OrderConfirmed"],
       },
-      targets: [new targets.CloudWatchLogGroup(this.orderConfirmedLogGroup)],
+      targets: [new targets.LambdaFunction(this.orderConfirmedLoggerFn)],
     });
 
     this.streamRelayFn = createGoFn(this, "StreamRelayFn", {

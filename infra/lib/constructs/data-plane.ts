@@ -45,6 +45,8 @@ export class DataPlane extends Construct {
       partitionKey: { name: "orderId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
+      // Phase 8a — stream-relay reads PENDING→CONFIRMED (and later other transitions).
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
     this.ordersTable.addGlobalSecondaryIndex({
       indexName: "userId",

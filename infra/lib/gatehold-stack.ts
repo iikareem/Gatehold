@@ -1,6 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { DataPlane } from "./constructs/data-plane";
+import { DomainEvents } from "./constructs/domain-events";
 import { HoldCapability } from "./constructs/hold-capability";
 import { HttpApi } from "./constructs/http-api";
 import { OrderAccept } from "./constructs/order-accept";
@@ -59,6 +60,18 @@ export class GateholdStack extends cdk.Stack {
       createOrderFn: orders.createOrderFn,
     });
 
-    addGateholdOutputs(this, { data, holds, orders, purchase, http });
+    const domainEvents = new DomainEvents(this, "DomainEvents", {
+      stage,
+      ordersTable: data.ordersTable,
+    });
+
+    addGateholdOutputs(this, {
+      data,
+      holds,
+      orders,
+      purchase,
+      http,
+      domainEvents,
+    });
   }
 }

@@ -44,7 +44,7 @@ Related docs:
 
 Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
 
-**Next:** Phase 8 — Streams / EventBridge / notifications (as a new construct, not paste into the stack).
+**Next:** Phase 8b — EventBridge bus + `OrderConfirmed` PutEvents (8a stream → relay log is done).
 
 ---
 
@@ -336,29 +336,74 @@ GateholdStack
 
 ---
 
-## Phase 8 — Streams, EventBridge, notifications
+## Phase 8 — Streams, EventBridge, notifications (sliced)
 
 **Goal:** Domain events follow data changes; fans can be notified without coupling.
 
-**Prerequisite:** Phase 7 composites in place so this lands as a new construct (e.g. `DomainEvents` / `Notifications`), not more paste into a giant stack.
+**Pipeline:** Orders stream → `stream-relay` → EventBridge → SNS → SQS → SES
+
+**Prerequisite:** Phase 7 composites — land this as `DomainEvents`, not paste into the stack.
+
+First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`). No Seats stream, no refund detail types yet.
+
+### Slice 8a — Orders stream + relay that logs
+
+**Goal:** Prove Streams fire on confirm; relay receives and filters records. No bus yet.
 
 **Build**
 
-- DynamoDB Streams on Orders (and Seats if useful)
-- `stream-relay` (Go): stream record → EventBridge detail types
-- Minimal consumer: log and/or SNS → SQS → SES (MiniStack inspect endpoints)
-- Contract: detail types for order confirmed, refunded, etc.
-- Prefer a dedicated construct under `infra/lib/constructs/`
+- Enable Orders stream (`NEW_AND_OLD_IMAGES`) in `DataPlane`
+- `go/stream-relay` Lambda (same zip packaging as hold-sweeper)
+- `DomainEvents` construct: stream event source → relay
+- Relay logs structured `OrderConfirmed candidate` for `MODIFY` + `PENDING`→`CONFIRMED` only
 
-**Learn**
+**Verify**
+
+- Hold → create-order → saga succeeds
+- Stream-relay logs show one candidate per confirm (`orderId`, `eventId`, `userId`, `seatIds`)
+
+**Status:** Done — stream + `DomainEvents` + log-only relay.
+
+### Slice 8b — EventBridge bus
+
+**Goal:** Stream change becomes a domain event on a bus you can inspect without email.
+
+**Build**
+
+- Custom EventBridge bus in `DomainEvents`
+- Contracts: detail-type `OrderConfirmed`, source `gatehold.orders`
+- Relay `PutEvents`; temporary rule → CloudWatch Logs (or log Lambda)
+
+**Done when:** Confirm produces a visible bus artifact (no SNS/SES required).
+
+### Slice 8c — SNS → SQS
+
+**Goal:** Fan-out from the bus; SQS is the MiniStack inspect surface.
+
+**Build**
+
+- EventBridge rule → SNS topic → SQS (+ DLQ)
+- Outputs: topic ARN, queue URL
+
+**Done when:** Confirm → message on notify queue via `/_ministack/sqs/messages`.
+
+### Slice 8d — SES email consumer
+
+**Goal:** End-to-end notification without SES in the saga.
+
+**Build**
+
+- SQS → notify-email Lambda → SES
+- Runbook: `/_ministack/ses/messages` after confirm
+- Document: duplicate stream deliveries may enqueue twice (ok for Phase 8)
+
+**Done when:** Confirm produces a visible SES artifact; saga still has no SES calls.
+
+**Learn (whole Phase 8)**
 
 - Why stream relay beats a separate outbox for this design
 - Decoupling producers from email/analytics
-
-**Done when**
-
-- Confirming an order produces a visible EventBridge/SES artifact locally
-- Relay is idempotent enough that duplicates do not spam forever (document strategy)
+- Stream record ≠ domain event (8a vs 8b)
 
 ---
 
@@ -556,7 +601,10 @@ Use these as “I can show this” moments while learning:
                           └── 5 Mock payment
                                └── 6 Saga + ledger + PAYING
                                     └── 7 CDK composites (infra refactor)
-                                         ├── 8 Streams / EventBridge bus / notifications
+                                         ├── 8a Orders stream + stream-relay (log)
+                                         │    └── 8b EventBridge bus
+                                         │         └── 8c SNS → SQS
+                                         │              └── 8d SES consumer
                                          ├── 9 Cognito + IAM + secrets
                                          ├── 10 Signed tickets
                                          └── 11 Cancel + refunds
@@ -583,7 +631,10 @@ Copy into a notebook or tick in place:
 - [ ] Phase 5 — Mock payment provider
 - [x] Phase 6 — Purchase saga
 - [x] Phase 7 — CDK composite constructs (infra refactor)
-- [ ] Phase 8 — Streams / EventBridge / notifications
+- [x] Phase 8a — Orders stream + stream-relay (log)
+- [ ] Phase 8b — EventBridge bus + OrderConfirmed
+- [ ] Phase 8c — SNS → SQS
+- [ ] Phase 8d — SES email consumer
 - [ ] Phase 9 — Auth, IAM, secrets
 - [ ] Phase 10 — Signed tickets
 - [ ] Phase 11 — Cancellation and mass refunds

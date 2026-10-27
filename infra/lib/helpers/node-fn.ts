@@ -58,6 +58,47 @@ export function createNodeFn(
   });
 }
 
+export interface CreateGoFnProps {
+  stage: string;
+  /** Short name → `gatehold-${stage}-${name}`. */
+  name: string;
+  /** Absolute path to the pre-built zip (contains `bootstrap`). */
+  zipPath: string;
+  environment?: Record<string, string>;
+  timeout?: cdk.Duration;
+  memorySize?: number;
+}
+
+/**
+ * Gatehold Go Lambda defaults (PROVIDED_AL2023, bootstrap handler, zip asset).
+ * Zip must already exist (`npm run build:hold-sweeper` / `build:stream-relay`).
+ */
+export function createGoFn(
+  scope: Construct,
+  id: string,
+  props: CreateGoFnProps,
+): lambda.Function {
+  const {
+    stage,
+    name,
+    zipPath,
+    environment = {},
+    timeout = cdk.Duration.seconds(30),
+    memorySize = 256,
+  } = props;
+
+  return new lambda.Function(scope, id, {
+    functionName: `gatehold-${stage}-${name}`,
+    runtime: lambda.Runtime.PROVIDED_AL2023,
+    architecture: lambda.Architecture.X86_64,
+    handler: "bootstrap",
+    code: lambda.Code.fromAsset(zipPath),
+    timeout,
+    memorySize,
+    environment,
+  });
+}
+
 /**
  * Base env shared by most Lambdas: stage, events/seats table names,
  * and MiniStack endpoint rewritten for Docker containers.

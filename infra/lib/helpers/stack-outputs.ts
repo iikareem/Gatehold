@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import type { DataPlane } from "../constructs/data-plane";
+import type { DomainEvents } from "../constructs/domain-events";
 import type { HoldCapability } from "../constructs/hold-capability";
 import type { HttpApi } from "../constructs/http-api";
 import type { OrderAccept } from "../constructs/order-accept";
@@ -17,9 +18,10 @@ export function addGateholdOutputs(
     orders: OrderAccept;
     purchase: PurchaseSaga;
     http: HttpApi;
+    domainEvents: DomainEvents;
   },
 ): void {
-  const { data, holds, orders, purchase, http } = parts;
+  const { data, holds, orders, purchase, http, domainEvents } = parts;
 
   new cdk.CfnOutput(stack, "ApiUrl", {
     value: http.api.url,
@@ -102,5 +104,8 @@ export function addGateholdOutputs(
   });
   new cdk.CfnOutput(stack, "MockPaymentUrl", {
     value: purchase.mockPaymentUrl,
+  });
+  new cdk.CfnOutput(stack, "StreamRelayFunctionName", {
+    value: domainEvents.streamRelayFn.functionName,
   });
 }

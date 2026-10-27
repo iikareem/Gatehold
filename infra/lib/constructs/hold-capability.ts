@@ -7,6 +7,7 @@ import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import { Construct } from "constructs";
 import {
   baseLambdaEnv,
+  createGoFn,
   createNodeFn,
   projectRoot,
 } from "../helpers/node-fn";
@@ -48,16 +49,11 @@ export class HoldCapability extends Construct {
     });
 
     // Go custom runtime: zip built by `npm run build:hold-sweeper` (bootstrap).
-    this.holdSweeperFn = new lambda.Function(this, "HoldSweeperFn", {
-      functionName: `gatehold-${stage}-hold-sweeper`,
-      runtime: lambda.Runtime.PROVIDED_AL2023,
-      architecture: lambda.Architecture.X86_64,
-      handler: "bootstrap",
-      code: lambda.Code.fromAsset(
-        path.join(projectRoot, "go/hold-sweeper/dist/hold-sweeper.zip"),
-      ),
+    this.holdSweeperFn = createGoFn(this, "HoldSweeperFn", {
+      stage,
+      name: "hold-sweeper",
+      zipPath: path.join(projectRoot, "go/hold-sweeper/dist/hold-sweeper.zip"),
       timeout: cdk.Duration.seconds(60),
-      memorySize: 256,
       environment: lambdaEnv,
     });
 

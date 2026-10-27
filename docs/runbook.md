@@ -257,10 +257,23 @@ npm run destroy:aws
 ## Phase 7 checklist
 
 - [x] `infra/lib/constructs/` — DataPlane, HoldCapability, OrderAccept, PurchaseSaga, HttpApi
-- [x] `infra/lib/helpers/` — `createNodeFn`, `createSagaTask`, `addGateholdOutputs`
+- [x] `infra/lib/helpers/` — `createNodeFn`, `createGoFn`, `createSagaTask`, `addGateholdOutputs`
 - [x] `gatehold-stack.ts` is a short composer (wire constructs + outputs only)
 - [x] Output names unchanged (`ApiUrl`, table names, function names, saga ARN)
 - [x] `cdk synth` + MiniStack smoke: health → hold → order → saga
+
+## Phase 8a checklist
+
+- [x] Orders table stream (`NEW_AND_OLD_IMAGES`) in `DataPlane`
+- [x] `DomainEvents` construct + `go/stream-relay` (log `PENDING`→`CONFIRMED` only)
+- [x] `npm run build:stream-relay` / `build:go-lambdas` wired into deploy
+- [ ] After confirm: stream-relay logs show `OrderConfirmed candidate orderId=…`
+
+Inspect relay logs (MiniStack / LocalStack-style):
+
+```bash
+aws --endpoint-url "$AWS_ENDPOINT_URL" logs tail /aws/lambda/gatehold-dev-stream-relay --since 10m --format short
+```
 
 ## TODO (later)
 

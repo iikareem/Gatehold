@@ -1,10 +1,26 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"log"
+	"os"
 
-// Stream relay — DynamoDB Streams → EventBridge domain events.
-// TODO: Lambda handler for stream records; map to email / audit / analytics events.
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+)
+
+// Stream relay — DynamoDB Streams on Orders → domain-event candidates.
+// Phase 8a: log PENDING→CONFIRMED only (no EventBridge yet).
 
 func main() {
-	fmt.Println("TODO: stream-relay")
+	if os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
+		lambda.Start(handler)
+		return
+	}
+
+	log.Println("stream-relay: Lambda-only binary (invoke via DynamoDB Streams)")
+}
+
+func handler(ctx context.Context, event events.DynamoDBEvent) error {
+	return HandleStream(ctx, event)
 }

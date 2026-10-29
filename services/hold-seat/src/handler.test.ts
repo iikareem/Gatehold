@@ -4,21 +4,25 @@ import type { APIGatewayProxyEvent } from "aws-lambda";
 import * as dynamodb from "../../shared/src/dynamodb";
 import { handler } from "./handler";
 
+const ALICE_SUB = "alice-sub-001";
+
 function holdEvent(
   overrides: {
     eventId?: string | null;
     body?: string | null;
     headers?: Record<string, string>;
+    sub?: string | null;
   } = {},
 ): APIGatewayProxyEvent {
   const eventId =
     overrides.eventId === null ? undefined : (overrides.eventId ?? "evt_001");
+  const sub = overrides.sub === null ? undefined : (overrides.sub ?? ALICE_SUB);
   return {
     body:
       overrides.body === undefined
         ? JSON.stringify({ seatIds: ["A-12-07"] })
         : overrides.body,
-    headers: overrides.headers ?? { "X-User-Id": "alice" },
+    headers: overrides.headers ?? {},
     multiValueHeaders: {},
     httpMethod: "POST",
     isBase64Encoded: false,
@@ -28,7 +32,11 @@ function holdEvent(
     multiValueQueryStringParameters: null,
     stageVariables: null,
     resource: "/events/{eventId}/holds",
-    requestContext: {} as APIGatewayProxyEvent["requestContext"],
+    requestContext: {
+      authorizer: sub
+        ? { claims: { sub, "cognito:username": "alice" } }
+        : undefined,
+    } as APIGatewayProxyEvent["requestContext"],
   };
 }
 
@@ -36,6 +44,12 @@ describe("hold-seat handler", () => {
   afterEach(() => {
     mock.restoreAll();
     delete process.env.SEATS_TABLE_NAME;
+  });
+
+  it("returns 401 when authorizer claims are missing", async () => {
+    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    const result = await handler(holdEvent({ sub: null }));
+    assert.equal(result.statusCode, 401);
   });
 
   it("returns 201 when the conditional update succeeds", async () => {

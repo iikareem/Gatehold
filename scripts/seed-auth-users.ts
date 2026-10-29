@@ -191,7 +191,7 @@ async function main(): Promise<void> {
         userPoolId,
         userPoolClientId: clientId,
         password: DEFAULT_PASSWORD,
-        note: "API still uses X-User-Id stub until Phase 9b",
+        note: "Send Authorization: Bearer <IdToken> on POST holds/orders",
         users: seeded.map((u) => ({
           username: u.username,
           sub: u.sub,

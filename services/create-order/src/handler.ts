@@ -11,6 +11,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import {
   buildCreateOrderTransactWriteInput,
+  callerUserId,
   getDocClient,
   getSqsClient,
   idempotencyTtlEpoch,
@@ -20,14 +21,12 @@ import {
   type OrderQueueMessage,
 } from "../../shared/src";
 
-const AUTH_STUB_USER = "test-user";
-
 /** Max seats per order (same cap as holds). */
 export const MAX_ORDER_SEATS = 8;
 
 /**
  * Phase 4 — accept order: claim idempotency, lock seats PAYING, create PENDING,
- * enqueue SQS, return 202. Auth stub: X-User-Id, else test-user.
+ * enqueue SQS, return 202. Identity: Cognito JWT `sub` from authorizer (9b).
  */
 export async function handler(
   event: APIGatewayProxyEvent,
@@ -37,6 +36,11 @@ export async function handler(
   const ordersTable = requireEnv("ORDERS_TABLE_NAME");
   const idempotencyTable = requireEnv("IDEMPOTENCY_TABLE_NAME");
   const orderQueueUrl = requireEnv("ORDER_QUEUE_URL");
+
+  const userId = callerUserId(event);
+  if (!userId) {
+    return json(401, { message: "unauthorized" });
+  }
 
   const idempotencyKey = headerValue(event, "idempotency-key");
   if (!idempotencyKey) {
@@ -49,7 +53,6 @@ export async function handler(
   }
   const { eventId, holdId, seatIds } = parsed;
 
-  const userId = headerValue(event, "x-user-id") || AUTH_STUB_USER;
   const nowMs = Date.now();
   const now = new Date(nowMs).toISOString();
   const payUntil = payUntilAt(nowMs);

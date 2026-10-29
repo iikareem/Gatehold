@@ -5,12 +5,16 @@ import * as dynamodb from "../../shared/src/dynamodb";
 import * as sqs from "../../shared/src/sqs";
 import { handler } from "./handler";
 
+const ALICE_SUB = "alice-sub-001";
+
 function orderEvent(
   overrides: {
     body?: string | null;
     headers?: Record<string, string>;
+    sub?: string | null;
   } = {},
 ): APIGatewayProxyEvent {
+  const sub = overrides.sub === null ? undefined : (overrides.sub ?? ALICE_SUB);
   return {
     body:
       overrides.body === undefined
@@ -21,7 +25,6 @@ function orderEvent(
           })
         : overrides.body,
     headers: overrides.headers ?? {
-      "X-User-Id": "alice",
       "Idempotency-Key": "idem-1",
     },
     multiValueHeaders: {},
@@ -33,7 +36,11 @@ function orderEvent(
     multiValueQueryStringParameters: null,
     stageVariables: null,
     resource: "/orders",
-    requestContext: {} as APIGatewayProxyEvent["requestContext"],
+    requestContext: {
+      authorizer: sub
+        ? { claims: { sub, "cognito:username": "alice" } }
+        : undefined,
+    } as APIGatewayProxyEvent["requestContext"],
   };
 }
 
@@ -56,11 +63,15 @@ describe("create-order handler", () => {
     delete process.env.ORDER_QUEUE_URL;
   });
 
+  it("returns 401 when authorizer claims are missing", async () => {
+    setEnv();
+    const result = await handler(orderEvent({ sub: null }));
+    assert.equal(result.statusCode, 401);
+  });
+
   it("returns 400 when Idempotency-Key is missing", async () => {
     setEnv();
-    const result = await handler(
-      orderEvent({ headers: { "X-User-Id": "alice" } }),
-    );
+    const result = await handler(orderEvent({ headers: {} }));
     assert.equal(result.statusCode, 400);
   });
 

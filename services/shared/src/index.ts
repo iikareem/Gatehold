@@ -27,6 +27,7 @@ export {
 } from "./types";
 
 export { requireEnv, optionalEnv } from "./env";
+export { callerUserId } from "./auth";
 export { createDynamoDBClient, getDocClient } from "./dynamodb";
 export { createSqsClient, getSqsClient } from "./sqs";
 export { createSfnClient, getSfnClient } from "./sfn";

@@ -11,9 +11,9 @@ export interface AuthProps {
 export const ADMIN_GROUP_NAME = "admin";
 
 /**
- * Phase 9a — Cognito identity plane (pool + client + admin group).
+ * Cognito identity plane (pool + client + admin group).
  *
- * No API authorizer yet: hold/order still use the X-User-Id stub until 9b.
+ * API Gateway Cognito authorizer (9b) validates JWTs from this pool.
  * Seed users with `npm run seed:auth` after deploy.
  */
 export class Auth extends Construct {

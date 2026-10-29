@@ -6,19 +6,18 @@ import type {
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import {
   buildHoldSeatsTransactWriteInput,
+  callerUserId,
   getDocClient,
   holdExpiresAt,
   requireEnv,
 } from "../../shared/src";
-
-const AUTH_STUB_USER = "test-user";
 
 /** Max seats per hold request (Phase 3 seatIds path). */
 export const MAX_HOLD_SEATS = 8;
 
 /**
  * Phase 3 — hold 1..MAX_HOLD_SEATS seats via TransactWriteItems.
- * Auth stub: X-User-Id header, else test-user (Cognito in Phase 9).
+ * Identity: Cognito JWT `sub` from API Gateway authorizer (Phase 9b).
  */
 export async function handler(
   event: APIGatewayProxyEvent,
@@ -29,13 +28,17 @@ export async function handler(
     return json(400, { message: "missing eventId path parameter" });
   }
 
+  const holdOwner = callerUserId(event);
+  if (!holdOwner) {
+    return json(401, { message: "unauthorized" });
+  }
+
   const parsed = parseHoldBody(event.body);
   if (!parsed.ok) {
     return json(400, { message: parsed.message });
   }
   const { seatIds } = parsed;
 
-  const holdOwner = headerValue(event, "x-user-id") || AUTH_STUB_USER;
   const nowMs = Date.now();
   const now = new Date(nowMs).toISOString();
   const expiresAt = holdExpiresAt(nowMs);
@@ -110,20 +113,6 @@ function parseHoldBody(
   }
 
   return { ok: true, seatIds: seatIds as string[] };
-}
-
-function headerValue(
-  event: APIGatewayProxyEvent,
-  name: string,
-): string | undefined {
-  const headers = event.headers || {};
-  const lower = name.toLowerCase();
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === lower && value) {
-      return value;
-    }
-  }
-  return undefined;
 }
 
 function isConditionalCheckFailed(err: unknown): boolean {

@@ -44,7 +44,7 @@ Related docs:
 
 Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
 
-**Next:** Phase 9 — Auth, IAM, and secrets (Phase 8 domain events complete).
+**Next:** Phase 9b — JWT authorizer + identity from claims (Phase 9a Cognito pool done).
 
 ---
 
@@ -417,25 +417,79 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 ---
 
-## Phase 9 — Auth, IAM, and secrets
+## Phase 9 — Auth, IAM, and secrets (sliced)
 
 **Goal:** Real identity and least privilege without changing business rules.
 
+**Invariant:** Hold / order / saga business rules stay the same — only *who is trusted* and *how config/IAM are scoped* change.
+
+**Identity (from 9b):** `userId` / `holdOwner` = Cognito JWT `sub`. Login usernames stay readable (`alice`, `admin`).
+
+**Prerequisite:** Phase 7 composites — land Cognito as an `Auth` construct, not paste into the stack.
+
+### Slice 9a — Cognito pool + local users
+
+**Goal:** Identity exists outside the API. Prove you can mint a JWT. No authorizer yet; `X-User-Id` stub stays.
+
 **Build**
 
-- Cognito user pool: fan users + admin group
-- API Gateway JWT authorizer; user ID only from token claims
-- Replace Phase 1 auth stub
-- Secrets Manager / SSM for mock-payment URL, hold TTL, group cap, refund rate
-- Tighten IAM per Lambda and state machine (start broad in early phases, narrow here)
-- Admin-only routes reserved for cancel/refund (can return `501` until Phase 11)
+- `Auth` construct: UserPool + UserPoolClient (`USER_PASSWORD_AUTH` / `ADMIN_USER_PASSWORD_AUTH`) + group `admin`
+- Outputs: `UserPoolId`, `UserPoolClientId`, `UserPoolIssuer`
+- `npm run seed:auth` — confirmed users `alice` (fan) and `admin` (in `admin` group); prints `sub` + claims
+- Runbook / api.md: InitiateAuth against MiniStack
+- StackPort: include `cognito` in `STACKPORT_SERVICES`
 
-**Learn**
+**Verify**
+
+- Deploy → `seed:auth` → IdToken decodes with `sub`, `cognito:username`, and for admin `cognito:groups` includes `admin`
+- Hold/order with `X-User-Id` still works unchanged
+
+**Status:** Done — `Auth` construct, outputs, `seed:auth` (`alice` + `admin` / group `admin`), JWT claims verified on MiniStack; `X-User-Id` stub unchanged.
+
+### Slice 9b — JWT authorizer + identity from claims
+
+**Goal:** Unauthenticated writes fail at the edge; Lambdas take identity only from the authorizer.
+
+**Build**
+
+- Cognito authorizer on `POST .../holds` and `POST /orders`; `GET /health` stays open
+- Shared `callerUserId(event)` → `requestContext.authorizer.claims.sub`; drop `X-User-Id` stub
+- Update contracts, api.md, Postman for `Authorization: Bearer`
+
+**Verify:** no token → 401; fan JWT → hold/order owned by that `sub`; hold → order → saga still confirms
+
+**Status:** Not started.
+
+### Slice 9c — Admin group + reserved admin routes
+
+**Goal:** Admin surface exists without Phase 11 behavior.
+
+**Build**
+
+- `POST /admin/events/{eventId}/cancel`, `GET /admin/events/{eventId}/refunds`
+- Require `cognito:groups` contains `admin` → else 403; admin → `501` until Phase 11
+
+**Verify:** fan JWT → 403; admin JWT → 501
+
+**Status:** Not started.
+
+### Slice 9d — Secrets + least-privilege IAM
+
+**Goal:** Config out of plain hardcoding where it matters; roles match the known call graph.
+
+**Build**
+
+- Secrets Manager for mock-payment URL; SSM for hold TTL / group cap / refund rate
+- Audit and narrow Lambda / state-machine grants; document the permission map
+
+**Verify:** full purchase path still works after narrowing
+
+**Learn (whole Phase 9)**
 
 - Never trusting `userId` from the body
 - Scoping IAM after the call graph is known (why this phase is late)
 
-**Done when**
+**Done when (whole Phase 9)**
 
 - Unauthenticated writes fail
 - Fan cannot call admin routes
@@ -615,7 +669,10 @@ Use these as “I can show this” moments while learning:
                                          │    └── 8b EventBridge bus
                                          │         └── 8c SNS → SQS
                                          │              └── 8d SES consumer
-                                         ├── 9 Cognito + IAM + secrets
+                                         ├── 9a Cognito pool + users
+                                         │    └── 9b JWT authorizer + claims
+                                         │         └── 9c Admin routes (501)
+                                         │              └── 9d Secrets + IAM
                                          ├── 10 Signed tickets
                                          └── 11 Cancel + refunds
                                               └── 12 Reconciler + auditor
@@ -645,7 +702,10 @@ Copy into a notebook or tick in place:
 - [x] Phase 8b — EventBridge bus + OrderConfirmed
 - [x] Phase 8c — SNS → SQS
 - [x] Phase 8d — SES email consumer
-- [ ] Phase 9 — Auth, IAM, secrets
+- [x] Phase 9a — Cognito pool + local users
+- [ ] Phase 9b — JWT authorizer + identity from claims
+- [ ] Phase 9c — Admin group + reserved admin routes
+- [ ] Phase 9d — Secrets + least-privilege IAM
 - [ ] Phase 10 — Signed tickets
 - [ ] Phase 11 — Cancellation and mass refunds
 - [ ] Phase 12 — Reconciler and auditor

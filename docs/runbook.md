@@ -247,7 +247,7 @@ npm run destroy:aws
 | `ministack:up` / `down` / `reset` / `health` / `ui` | Local emulator + StackPort |
 | `deploy:local` / `destroy:local` | CDK → MiniStack via `cdklocal` |
 | `deploy:aws` / `destroy:aws` | CDK → real AWS via `cdk` |
-| `seed` / `get-seat` | AWS SDK helpers (follow `AWS_ENDPOINT_URL` if set) |
+| `seed` / `seed:auth` / `get-seat` | AWS SDK helpers (follow `AWS_ENDPOINT_URL` if set) |
 | `build` | Typecheck |
 | `cd go && go run ./hold-sweeper` | Phase 2: release expired HELD seats (needs env sourced) |
 
@@ -349,6 +349,35 @@ curl -sS http://localhost:4566/_ministack/health | jq .
 curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
 curl -sS http://localhost:4566/_ministack/ses/messages | jq .
 ```
+
+## Phase 9a checklist
+
+- [x] `Auth` construct — UserPool `gatehold-{stage}`, app client (password auth), group `admin`
+- [x] Outputs: `UserPoolId`, `UserPoolClientId`, `UserPoolIssuer`
+- [x] `npm run seed:auth` creates `alice` + `admin` (password `Gatehold1!`) and prints `sub` / groups
+- [x] IdToken for `admin` includes `cognito:groups: ["admin"]`
+- [x] Hold/order still work with `X-User-Id` (authorizer is Phase 9b)
+- [x] StackPort: use service id `cognito-idp` (not `cognito`) in `STACKPORT_SERVICES`
+
+### Get a JWT (MiniStack)
+
+From the **repo root** (`Gatehold/`, not `go/`), with stack deployed:
+
+```bash
+cd /path/to/Gatehold
+set -a && source .env.example && set +a   # optional; seed:auth defaults MiniStack if skipped
+npm run seed:auth
+
+# or manually (after seed:auth / knowing client id):
+POOL_CLIENT=$(node -e "console.log(require('./.cdk-outputs.json')['Gatehold-dev'].UserPoolClientId)")
+aws --endpoint-url "$AWS_ENDPOINT_URL" cognito-idp initiate-auth \
+  --client-id "$POOL_CLIENT" \
+  --auth-flow USER_PASSWORD_AUTH \
+  --auth-parameters USERNAME=alice,PASSWORD=Gatehold1! \
+  --query 'AuthenticationResult.IdToken' --output text
+```
+
+Decode the middle JWT segment (base64url) to inspect `sub`, `cognito:username`, `cognito:groups`.
 
 ## TODO (later)
 

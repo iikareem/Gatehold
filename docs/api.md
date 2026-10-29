@@ -27,13 +27,13 @@ Seed defaults: event `evt_001`, seats `A-12-01` … `A-12-50`, all `AVAILABLE`.
 
 ### Base URL (MiniStack)
 
-CDK prints an `execute-api` URL; against MiniStack call via the emulator edge:
+CDK prints an `execute-api` URL; against MiniStack use the emulator edge (same shape as Postman `gatewayBase`):
 
 ```bash
 set -a && source .env.example && set +a
 
 API_ID=$(node -e "const o=require('./.cdk-outputs.json'); const u=o['Gatehold-dev'].ApiUrl; console.log(new URL(u).hostname.split('.')[0])")
-BASE="http://localhost.localstack.cloud:4566/restapis/${API_ID}/dev/_user_request_"
+BASE="http://localhost:4566/_aws/execute-api/${API_ID}/dev"
 
 echo "$BASE"
 ```
@@ -314,10 +314,75 @@ npm run seed
 
 ---
 
+## Phase 9a — Cognito login (get an IdToken)
+
+Pool + client exist after deploy. Login returns a JWT for learning; **write routes do not require it until 9b** (still use `X-User-Id`).
+
+| | |
+|---|---|
+| Pool name | `gatehold-dev` |
+| Pool id | `.cdk-outputs.json` → `UserPoolId` (admin Cognito APIs) |
+| Client id | `.cdk-outputs.json` → `UserPoolClientId` (**login** uses this) |
+| Seeded users | `alice` (fan), `admin` (group `admin`) |
+| Password | `Gatehold1!` |
+
+### Seed users (once per MiniStack reset / redeploy)
+
+```bash
+# from repo root (Gatehold/), not go/
+npm run seed:auth
+```
+
+Prints each user’s `sub` and JWT claims (including `cognito:groups` for `admin`).
+
+**Postman:** after seed, **Auth → Login as alice** (or **Login as admin**) against MiniStack. Set env `userPoolClientId` from outputs; password env `cognitoPassword` defaults to `Gatehold1!`. Test script saves `idToken`.
+
+### Login — get IdToken (AWS CLI)
+
+```bash
+set -a && source .env.example && set +a
+
+POOL_CLIENT=$(node -e "console.log(require('./.cdk-outputs.json')['Gatehold-dev'].UserPoolClientId)")
+
+# Fan
+aws --endpoint-url "$AWS_ENDPOINT_URL" cognito-idp initiate-auth \
+  --client-id "$POOL_CLIENT" \
+  --auth-flow USER_PASSWORD_AUTH \
+  --auth-parameters USERNAME=alice,PASSWORD=Gatehold1! \
+  --query 'AuthenticationResult.IdToken' --output text
+
+# Admin (same password; token includes cognito:groups = ["admin"])
+aws --endpoint-url "$AWS_ENDPOINT_URL" cognito-idp initiate-auth \
+  --client-id "$POOL_CLIENT" \
+  --auth-flow USER_PASSWORD_AUTH \
+  --auth-parameters USERNAME=admin,PASSWORD=Gatehold1! \
+  --query 'AuthenticationResult.IdToken' --output text
+```
+
+Save the printed string — that is the **IdToken** (JWT). In Phase 9b you will send it as:
+
+```http
+Authorization: Bearer <IdToken>
+```
+
+### Decode claims (optional)
+
+```bash
+TOKEN='paste-IdToken-here'
+python3 -c "import sys,base64,json; p=sys.argv[1].split('.')[1]; p+='='*((-len(p))%4); print(json.dumps(json.loads(base64.urlsafe_b64decode(p)),indent=2))" "$TOKEN"
+```
+
+Expect at least: `sub`, `cognito:username`, `iss` (matches `UserPoolIssuer`). For `admin`, also `cognito:groups: ["admin"]`.
+
+### Until Phase 9b
+
+Hold/order curls still use `-H "X-User-Id: alice"`. A Bearer token is ignored by the API today.
+
 ## Not implemented yet
 
 Do not expect these to work:
 
 - `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
-- Order queue **consumer** / saga / payment — later phases (messages stay on SQS)
-- Cognito JWT — Phase 9 (`X-User-Id` stub only)
+- API Gateway JWT authorizer / identity from `sub` — Phase 9b
+- Admin cancel/refund routes — Phase 9c (`501` stubs) / Phase 11
+- Cognito-required writes — Phase 9b (`X-User-Id` stub still active)

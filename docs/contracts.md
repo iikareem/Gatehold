@@ -51,7 +51,7 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 
 ## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
-**Auth stub (until Phase 9 Cognito):** read `X-User-Id` header; if missing, use `test-user`. Never trust a `userId` from the body.
+**Auth stub (until Phase 9b):** read `X-User-Id` header; if missing, use `test-user`. Never trust a `userId` from the body. Phase 9a adds Cognito pool/users only; JWT `sub` replaces this stub in 9b.
 
 **Request body:**
 
@@ -145,14 +145,14 @@ Implementation: `go/hold-sweeper` under module `github.com/iikareem/Gatehold/go`
 
 **Goal:** Accept a purchase for an existing hold: claim idempotency key → verify hold/event → lock seats `HELD→PAYING` + create order `PENDING` (one `TransactWriteItems`) → enqueue SQS → return `202`. No queue consumer in this phase.
 
-**Auth stub:** same as holds — `X-User-Id` header, else `test-user`. Never trust `userId` from the body.
+**Auth stub:** same as holds — `X-User-Id` header, else `test-user` (Cognito JWT `sub` in Phase 9b). Never trust `userId` from the body.
 
 ### Request
 
 Headers:
 
 - `Idempotency-Key` — **required**. Missing → `400`.
-- `X-User-Id` — optional stub until Cognito.
+- `X-User-Id` — optional stub until Phase 9b.
 
 Body (`seatIds` required so updates target seat items without a `holdId` GSI; client reuses the list from the hold response):
 

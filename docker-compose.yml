@@ -51,9 +51,9 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_REGION=us-east-1
       - AWS_DEFAULT_REGION=us-east-1
-      # Probe services we use locally (Phase 0–9a).
+      # Probe services we use locally (Phase 0–9d).
       # Cognito UI key is cognito-idp (not "cognito") — see StackPort STACKPORT_SERVICES.
-      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,sns,ses,apigateway,iam,stepfunctions,logs,events,scheduler,cognito-idp
+      - STACKPORT_SERVICES=dynamodb,s3,lambda,sqs,sns,ses,apigateway,iam,stepfunctions,logs,events,scheduler,cognito-idp,secretsmanager,ssm
     depends_on:
       ministack:
         condition: service_healthy

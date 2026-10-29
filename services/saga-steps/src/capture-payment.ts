@@ -2,6 +2,7 @@ import {
   appendLedgerItem,
   buildLedgerItem,
   getDocClient,
+  mockPaymentBaseUrl,
   paymentCaptureKey,
   requireEnv,
 } from "../../shared/src";
@@ -41,7 +42,7 @@ export async function handler(
   event: AuthorizedSagaState,
 ): Promise<AuthorizedSagaState> {
   const ledgerTable = requireEnv("LEDGER_TABLE_NAME");
-  const mockBase = requireEnv("MOCK_PAYMENT_URL");
+  const mockBase = await mockPaymentBaseUrl();
 
   if (!event.authorizationId) {
     throw new CapturePaymentError(

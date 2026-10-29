@@ -33,6 +33,11 @@ export { createSqsClient, getSqsClient } from "./sqs";
 export { createSfnClient, getSfnClient } from "./sfn";
 export { createCognitoIdpClient } from "./cognito";
 export {
+  createSecretsManagerClient,
+  getSecretString,
+  mockPaymentBaseUrl,
+} from "./secrets";
+export {
   HOLD_DURATION_MS,
   buildHoldSeatUpdateInput,
   buildHoldSeatsTransactWriteInput,

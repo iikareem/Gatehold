@@ -3,13 +3,13 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import { Construct } from "constructs";
 import {
   baseLambdaEnv,
   createNodeFn,
-  dockerReachableEndpoint,
   projectRoot,
 } from "../helpers/node-fn";
 import { createSagaTask } from "../helpers/saga-task";
@@ -22,6 +22,10 @@ export interface PurchaseSagaProps {
   ledgerTable: dynamodb.ITable;
   /** Order accept queue — saga-starter consumes from it. */
   orderQueue: sqs.IQueue;
+  /** Mock payment URL secret (Phase 9d.2). */
+  mockPaymentSecret: secretsmanager.ISecret;
+  /** Seeded URL for stack outputs (value also lives in the secret). */
+  mockPaymentUrl: string;
 }
 
 /**
@@ -58,6 +62,7 @@ export class PurchaseSaga extends Construct {
       ordersTable,
       ledgerTable,
       orderQueue,
+      mockPaymentSecret,
     } = props;
 
     const lambdaEnv = baseLambdaEnv(stage, {
@@ -65,10 +70,10 @@ export class PurchaseSaga extends Construct {
       seatsTableName: seatsTable.tableName,
     });
 
-    this.mockPaymentUrl = dockerReachableEndpoint(
-      process.env.MOCK_PAYMENT_URL || "http://127.0.0.1:8090",
-    );
-    const mockPaymentUrl = this.mockPaymentUrl;
+    this.mockPaymentUrl = props.mockPaymentUrl;
+    const paymentSecretEnv = {
+      MOCK_PAYMENT_SECRET_ARN: mockPaymentSecret.secretArn,
+    };
 
     // Phase 6 happy path:
     // VerifyHold → AuthorizePayment → ConfirmSeat → CapturePayment
@@ -99,7 +104,7 @@ export class PurchaseSaga extends Construct {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
+        ...paymentSecretEnv,
         ORDER_AMOUNT_CENTS: process.env.ORDER_AMOUNT_CENTS || String(5000),
       },
     });
@@ -125,7 +130,7 @@ export class PurchaseSaga extends Construct {
       environment: {
         ...lambdaEnv,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
+        ...paymentSecretEnv,
       },
     });
 
@@ -186,7 +191,7 @@ export class PurchaseSaga extends Construct {
       environment: {
         ...lambdaEnv,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
+        ...paymentSecretEnv,
       },
     });
 
@@ -248,7 +253,7 @@ export class PurchaseSaga extends Construct {
       environment: {
         ...lambdaEnv,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
-        MOCK_PAYMENT_URL: mockPaymentUrl,
+        ...paymentSecretEnv,
       },
     });
 
@@ -360,5 +365,11 @@ export class PurchaseSaga extends Construct {
     ordersTable.grantReadWriteData(this.markConfirmedFn);
     ordersTable.grantReadWriteData(this.markFailedFn);
     ordersTable.grantReadWriteData(this.markRefundedFn);
+
+    // Payment provider URL — only these four may read the secret (9d.2).
+    mockPaymentSecret.grantRead(this.authorizePaymentFn);
+    mockPaymentSecret.grantRead(this.capturePaymentFn);
+    mockPaymentSecret.grantRead(this.voidAuthorizationFn);
+    mockPaymentSecret.grantRead(this.refundPaymentFn);
   }
 }

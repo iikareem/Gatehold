@@ -55,6 +55,8 @@ export class GateholdStack extends cdk.Stack {
       ordersTable: data.ordersTable,
       ledgerTable: data.ledgerTable,
       orderQueue: orders.orderQueue,
+      mockPaymentSecret: config.mockPaymentSecret,
+      mockPaymentUrl: config.mockPaymentUrl,
     });
 
     const http = new HttpApi(this, "Http", {

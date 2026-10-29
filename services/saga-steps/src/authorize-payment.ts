@@ -5,6 +5,7 @@ import {
   DEFAULT_ORDER_AMOUNT_CENTS,
   getDocClient,
   LEDGER_CURRENCY_USD,
+  mockPaymentBaseUrl,
   paymentAuthKey,
   requireEnv,
 } from "../../shared/src";
@@ -52,7 +53,7 @@ export async function handler(
 ): Promise<AuthorizedSagaState> {
   const ledgerTable = requireEnv("LEDGER_TABLE_NAME");
   const ordersTable = requireEnv("ORDERS_TABLE_NAME");
-  const mockBase = requireEnv("MOCK_PAYMENT_URL");
+  const mockBase = await mockPaymentBaseUrl();
   const amount = orderAmountCents();
   const currency = LEDGER_CURRENCY_USD;
   const pk = paymentAuthKey(event.orderId);

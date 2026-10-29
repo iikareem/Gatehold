@@ -2,6 +2,7 @@ import {
   appendLedgerItem,
   buildLedgerItem,
   getDocClient,
+  mockPaymentBaseUrl,
   paymentVoidKey,
   requireEnv,
 } from "../../shared/src";
@@ -49,7 +50,7 @@ export async function handler(
   event: VoidAuthorizationInput,
 ): Promise<VoidAuthorizationInput> {
   const ledgerTable = requireEnv("LEDGER_TABLE_NAME");
-  const mockBase = requireEnv("MOCK_PAYMENT_URL");
+  const mockBase = await mockPaymentBaseUrl();
 
   if (!event.authorizationId) {
     throw new VoidAuthorizationError(

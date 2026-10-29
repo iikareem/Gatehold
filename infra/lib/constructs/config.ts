@@ -18,7 +18,8 @@ export interface ConfigProps {
 /**
  * Secrets Manager + SSM Parameter Store (Phase 9d).
  *
- * 9d.1 creates resources only — Lambdas still use env/constants until 9d.2/9d.3.
+ * 9d.2 wires mock-payment secret into payment Lambdas.
+ * 9d.3 wires SSM hold TTL / max seats (params exist from 9d.1).
  */
 export class Config extends Construct {
   readonly mockPaymentSecret: secretsmanager.ISecret;

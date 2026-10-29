@@ -112,11 +112,11 @@ export function addGateholdOutputs(
   });
   new cdk.CfnOutput(stack, "MockPaymentSecretArn", {
     value: config.mockPaymentSecret.secretArn,
-    description: "Secrets Manager ARN for mock-payment URL (9d.1; wired in 9d.2)",
+    description: "Secrets Manager ARN for mock-payment URL (payment Lambdas GetSecretValue)",
   });
   new cdk.CfnOutput(stack, "MockPaymentSecretUrl", {
     value: config.mockPaymentUrl,
-    description: "URL seeded into MockPaymentSecret (observe; Lambdas still use env until 9d.2)",
+    description: "URL seeded into MockPaymentSecret",
   });
   new cdk.CfnOutput(stack, "HoldTtlMsParamName", {
     value: config.holdTtlMsParamName,

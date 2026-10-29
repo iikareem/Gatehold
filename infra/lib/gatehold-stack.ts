@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { Auth } from "./constructs/auth";
 import { DataPlane } from "./constructs/data-plane";
 import { DomainEvents } from "./constructs/domain-events";
 import { HoldCapability } from "./constructs/hold-capability";
@@ -27,6 +28,8 @@ export class GateholdStack extends cdk.Stack {
         : cdk.RemovalPolicy.DESTROY;
 
     const data = new DataPlane(this, "Data", { stage, removalPolicy });
+
+    const auth = new Auth(this, "Auth", { stage, removalPolicy });
 
     const holds = new HoldCapability(this, "Holds", {
       stage,
@@ -68,6 +71,7 @@ export class GateholdStack extends cdk.Stack {
 
     addGateholdOutputs(this, {
       data,
+      auth,
       holds,
       orders,
       purchase,

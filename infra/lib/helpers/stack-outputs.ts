@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import type { Auth } from "../constructs/auth";
 import type { DataPlane } from "../constructs/data-plane";
 import type { DomainEvents } from "../constructs/domain-events";
 import type { HoldCapability } from "../constructs/hold-capability";
@@ -14,6 +15,7 @@ export function addGateholdOutputs(
   stack: cdk.Stack,
   parts: {
     data: DataPlane;
+    auth: Auth;
     holds: HoldCapability;
     orders: OrderAccept;
     purchase: PurchaseSaga;
@@ -21,7 +23,7 @@ export function addGateholdOutputs(
     domainEvents: DomainEvents;
   },
 ): void {
-  const { data, holds, orders, purchase, http, domainEvents } = parts;
+  const { data, auth, holds, orders, purchase, http, domainEvents } = parts;
 
   new cdk.CfnOutput(stack, "ApiUrl", {
     value: http.api.url,
@@ -125,5 +127,17 @@ export function addGateholdOutputs(
   });
   new cdk.CfnOutput(stack, "NotifyEmailFunctionName", {
     value: domainEvents.notifyEmailFn.functionName,
+  });
+  new cdk.CfnOutput(stack, "UserPoolId", {
+    value: auth.userPool.userPoolId,
+    description: "Cognito user pool id (Phase 9a)",
+  });
+  new cdk.CfnOutput(stack, "UserPoolClientId", {
+    value: auth.userPoolClient.userPoolClientId,
+    description: "Cognito app client id for InitiateAuth",
+  });
+  new cdk.CfnOutput(stack, "UserPoolIssuer", {
+    value: auth.issuerUrl,
+    description: "JWT iss claim / OIDC issuer URL",
   });
 }

@@ -10,6 +10,7 @@
     "build:notify-email": "bash go/notify-email/build.sh",
     "build:go-lambdas": "npm run build:hold-sweeper && npm run build:stream-relay && npm run build:notify-email",
     "seed": "ts-node --transpile-only scripts/seed.ts",
+    "seed:auth": "ts-node --transpile-only scripts/seed-auth-users.ts",
     "get-seat": "ts-node --transpile-only scripts/get-seat.ts",
     "cdk": "cd infra && npx cdk",
     "cdklocal": "cd infra && npx cdklocal",
@@ -31,6 +32,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1159.0",
     "@aws-sdk/client-dynamodb": "^3.758.0",
     "@aws-sdk/client-sfn": "^3.1156.0",
     "@aws-sdk/client-sqs": "^3.1155.0",

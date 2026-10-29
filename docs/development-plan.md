@@ -491,7 +491,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** happy-path purchase hits mock via secret.
 
-**Status:** Not started.
+**Status:** Done — payment Lambdas use `MOCK_PAYMENT_SECRET_ARN` + `GetSecretValue`; plain `MOCK_PAYMENT_URL` env removed; hold→order→saga CONFIRMED on MiniStack.
 
 #### 9d.3 — SSM → hold TTL + seat cap (+ refund-rate stub)
 
@@ -731,7 +731,7 @@ Copy into a notebook or tick in place:
 - [ ] Phase 9b — JWT authorizer + identity from claims
 - [ ] Phase 9c — Admin group + reserved admin routes
 - [x] Phase 9d.1 — Config construct + StackPort secrets/ssm
-- [ ] Phase 9d.2 — Secrets Manager → payment Lambdas
+- [x] Phase 9d.2 — Secrets Manager → payment Lambdas
 - [ ] Phase 9d.3 — SSM hold TTL + seat cap
 - [ ] Phase 9d.4 — Least-privilege IAM + permission map
 - [ ] Phase 10 — Signed tickets

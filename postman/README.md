@@ -12,6 +12,7 @@
 
 | Folder | Main request | Purpose |
 |---|---|---|
+| **Auth** | Login as alice / admin | Phase 9a Cognito `InitiateAuth` → saves `idToken` |
 | **Health** | Liveness, Get seat | Smoke / inspect seat (`AVAILABLE` → `HELD` → `PAYING` → `SOLD`) |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` (saga starts) |
@@ -20,6 +21,16 @@
 | **Mock payment** | Authorize → Capture/Void/Refund + Status | Compose `:8090` (or host `go run`) |
 
 Variants (409, 400, chaos, idempotent retry) are under **Examples** on those requests — not separate top-level calls (except **Authorize (chaos)**).
+
+### Cognito login (Phase 9a)
+
+Prereq: deploy + `npm run seed:auth` (creates `alice` / `admin`, password `Gatehold1!`).
+
+1. Set env `userPoolClientId` from `.cdk-outputs.json` → `UserPoolClientId` (re-import or paste after redeploy).
+2. **Auth → Login as alice** — Tests pass; env gets `idToken`, `aliceIdToken`, `cognitoSub`, `cognitoUsername`.
+3. **Auth → Login as admin** — same; `cognitoGroups` should be `["admin"]`.
+
+API holds/orders still use `X-User-Id` until Phase 9b (Bearer not required yet).
 
 ### Happy path (API Gateway + saga + Phase 8)
 
@@ -57,13 +68,13 @@ Also see Examples on **Authorize** for `429` / timeout / missing Content-Type.
 
 ## After redeploy
 
-Update `gatewayBase`:
+Update `gatewayBase` and `userPoolClientId`:
 
 ```bash
-node -e "const id=new URL(require('./.cdk-outputs.json')['Gatehold-dev'].ApiUrl).hostname.split('.')[0]; console.log('http://localhost:4566/_aws/execute-api/'+id+'/dev')"
+node -e "const o=require('./.cdk-outputs.json')['Gatehold-dev']; const id=new URL(o.ApiUrl).hostname.split('.')[0]; console.log('gatewayBase=http://localhost:4566/_aws/execute-api/'+id+'/dev'); console.log('userPoolClientId='+o.UserPoolClientId)"
 ```
 
-Paste into the **Gatehold MiniStack** environment. Log groups / bus names stay:
+Paste into the **Gatehold MiniStack** environment. Re-run `npm run seed:auth` after Cognito pool recreate. Log groups / bus names stay:
 
 - `streamRelayLogGroup` = `/aws/lambda/gatehold-dev-stream-relay`
 - `orderConfirmedLoggerLogGroup` = `/aws/lambda/gatehold-dev-order-confirmed-logger`

@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import type { Auth } from "../constructs/auth";
+import type { Config } from "../constructs/config";
 import type { DataPlane } from "../constructs/data-plane";
 import type { DomainEvents } from "../constructs/domain-events";
 import type { HoldCapability } from "../constructs/hold-capability";
@@ -15,6 +16,7 @@ export function addGateholdOutputs(
   stack: cdk.Stack,
   parts: {
     data: DataPlane;
+    config: Config;
     auth: Auth;
     holds: HoldCapability;
     orders: OrderAccept;
@@ -23,7 +25,8 @@ export function addGateholdOutputs(
     domainEvents: DomainEvents;
   },
 ): void {
-  const { data, auth, holds, orders, purchase, http, domainEvents } = parts;
+  const { data, config, auth, holds, orders, purchase, http, domainEvents } =
+    parts;
 
   new cdk.CfnOutput(stack, "ApiUrl", {
     value: http.api.url,
@@ -106,6 +109,26 @@ export function addGateholdOutputs(
   });
   new cdk.CfnOutput(stack, "MockPaymentUrl", {
     value: purchase.mockPaymentUrl,
+  });
+  new cdk.CfnOutput(stack, "MockPaymentSecretArn", {
+    value: config.mockPaymentSecret.secretArn,
+    description: "Secrets Manager ARN for mock-payment URL (9d.1; wired in 9d.2)",
+  });
+  new cdk.CfnOutput(stack, "MockPaymentSecretUrl", {
+    value: config.mockPaymentUrl,
+    description: "URL seeded into MockPaymentSecret (observe; Lambdas still use env until 9d.2)",
+  });
+  new cdk.CfnOutput(stack, "HoldTtlMsParamName", {
+    value: config.holdTtlMsParamName,
+    description: "SSM parameter for hold TTL ms (wired in 9d.3)",
+  });
+  new cdk.CfnOutput(stack, "MaxHoldSeatsParamName", {
+    value: config.maxHoldSeatsParamName,
+    description: "SSM parameter for max seats per hold/order (wired in 9d.3)",
+  });
+  new cdk.CfnOutput(stack, "RefundRateParamName", {
+    value: config.refundRateParamName,
+    description: "SSM parameter for refund rate (Phase 11)",
   });
   new cdk.CfnOutput(stack, "StreamRelayFunctionName", {
     value: domainEvents.streamRelayFn.functionName,

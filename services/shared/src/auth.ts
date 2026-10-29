@@ -1,5 +1,27 @@
 import type { APIGatewayProxyEvent } from "aws-lambda";
 
+/** Cognito group for cancel / refund operators (must match Auth construct). */
+export const ADMIN_GROUP_NAME = "admin";
+
+/**
+ * True when Cognito JWT claims include the admin group.
+ * `cognito:groups` may be a string or string[].
+ */
+export function hasAdminGroup(
+  claims: Record<string, unknown> | undefined | null,
+  groupName: string = ADMIN_GROUP_NAME,
+): boolean {
+  if (!claims) return false;
+  const raw = claims["cognito:groups"];
+  if (typeof raw === "string") {
+    return raw === groupName;
+  }
+  if (Array.isArray(raw)) {
+    return raw.some((g) => g === groupName);
+  }
+  return false;
+}
+
 /**
  * Caller identity from API Gateway Cognito authorizer claims.
  * Prefer `sub` (stable Cognito user id). No X-User-Id fallback.

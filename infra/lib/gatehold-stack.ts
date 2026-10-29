@@ -62,6 +62,8 @@ export class GateholdStack extends cdk.Stack {
       holdSeatFn: holds.holdSeatFn,
       createOrderFn: orders.createOrderFn,
       userPool: auth.userPool,
+      userPoolClient: auth.userPoolClient,
+      userPoolIssuer: auth.issuerUrl,
     });
 
     const domainEvents = new DomainEvents(this, "DomainEvents", {

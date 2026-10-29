@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { APIGatewayProxyEvent } from "aws-lambda";
-import { callerUserId } from "./auth";
+import { callerUserId, hasAdminGroup } from "./auth";
 
 function eventWithAuthorizer(
   authorizer: APIGatewayProxyEvent["requestContext"]["authorizer"],
@@ -23,6 +23,20 @@ function eventWithAuthorizer(
     } as APIGatewayProxyEvent["requestContext"],
   };
 }
+
+describe("hasAdminGroup", () => {
+  it("accepts admin in groups array", () => {
+    assert.equal(hasAdminGroup({ "cognito:groups": ["admin"] }), true);
+  });
+
+  it("rejects fan with empty groups", () => {
+    assert.equal(hasAdminGroup({ "cognito:groups": [] }), false);
+  });
+
+  it("accepts single-string groups claim", () => {
+    assert.equal(hasAdminGroup({ "cognito:groups": "admin" }), true);
+  });
+});
 
 describe("callerUserId", () => {
   it("reads sub from authorizer.claims", () => {

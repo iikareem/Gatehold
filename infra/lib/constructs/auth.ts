@@ -7,13 +7,14 @@ export interface AuthProps {
   removalPolicy: cdk.RemovalPolicy;
 }
 
-/** Cognito group name for cancel / refund operators (enforced in Phase 9c). */
+/** Cognito group name for cancel / refund operators (admin TOKEN authorizer). */
 export const ADMIN_GROUP_NAME = "admin";
 
 /**
  * Cognito identity plane (pool + client + admin group).
  *
- * API Gateway Cognito authorizer (9b) validates JWTs from this pool.
+ * 9b Cognito authorizer validates any pool JWT on holds/orders.
+ * 9c admin TOKEN authorizer also requires group `admin` on /admin/*.
  * Seed users with `npm run seed:auth` after deploy.
  */
 export class Auth extends Construct {

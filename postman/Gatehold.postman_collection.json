@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Auth (Phase 9a Cognito login), Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAuth: seed:auth then Login as alice|admin → saves idToken. Holds/Orders use Authorization: Bearer {{idToken}}.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8: after confirm, Domain events → stream-relay + logger + List SES messages.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack \u2192 Desktop Agent.\\n\\nFolders: Auth, Health, Holds, Orders, Admin (9c), Saga logs, Domain events, Mock payment.\\n\\nAuth: seed:auth then Login as alice|admin \u2192 saves idToken / aliceIdToken / adminIdToken.\\nHolds/Orders: Authorization Bearer {{idToken}}.\\nAdmin: fan JWT \u2192 403; admin JWT \u2192 501 (stubs until Phase 11).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -95,7 +95,7 @@
                   "value": "application/x-amz-json-1.1"
                 }
               ],
-              "body": "{\n  \"AuthenticationResult\": {\n    \"AccessToken\": \"eyJ…\",\n    \"IdToken\": \"eyJ…\",\n    \"RefreshToken\": \"…\",\n    \"ExpiresIn\": 3600,\n    \"TokenType\": \"Bearer\"\n  }\n}"
+              "body": "{\n  \"AuthenticationResult\": {\n    \"AccessToken\": \"eyJ\u2026\",\n    \"IdToken\": \"eyJ\u2026\",\n    \"RefreshToken\": \"\u2026\",\n    \"ExpiresIn\": 3600,\n    \"TokenType\": \"Bearer\"\n  }\n}"
             }
           ]
         },
@@ -153,7 +153,7 @@
               "raw": "{\n  \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n  \"ClientId\": \"{{userPoolClientId}}\",\n  \"AuthParameters\": {\n    \"USERNAME\": \"admin\",\n    \"PASSWORD\": \"{{cognitoPassword}}\"\n  }\n}"
             },
             "url": "{{ministackBase}}/",
-            "description": "USER_PASSWORD_AUTH for `admin` (group admin). Saves idToken + adminIdToken. Decode cognitoGroups — expect [\"admin\"]."
+            "description": "USER_PASSWORD_AUTH for `admin` (group admin). Saves idToken + adminIdToken. Decode cognitoGroups \u2014 expect [\"admin\"]."
           },
           "response": [
             {
@@ -185,7 +185,7 @@
                   "value": "application/x-amz-json-1.1"
                 }
               ],
-              "body": "{\n  \"AuthenticationResult\": {\n    \"IdToken\": \"eyJ… (cognito:groups includes admin)\"\n  }\n}"
+              "body": "{\n  \"AuthenticationResult\": {\n    \"IdToken\": \"eyJ\u2026 (cognito:groups includes admin)\"\n  }\n}"
             }
           ]
         }
@@ -264,7 +264,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"HELD\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"expiresAt\": \"…\"\n  }\n}"
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"HELD\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"expiresAt\": \"\u2026\"\n  }\n}"
             },
             {
               "name": "200 PAYING",
@@ -282,7 +282,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"PAYING\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_…\",\n    \"payUntil\": \"…\"\n  }\n}"
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"PAYING\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_\u2026\",\n    \"payUntil\": \"\u2026\"\n  }\n}"
             },
             {
               "name": "200 SOLD (after saga confirm)",
@@ -300,7 +300,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"SOLD\",\n    \"holdId\": \"h_…\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_…\"\n  }\n}"
+              "body": "{\n  \"ok\": true,\n  \"stage\": \"dev\",\n  \"seat\": {\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"status\": \"SOLD\",\n    \"holdId\": \"h_\u2026\",\n    \"holdOwner\": \"alice\",\n    \"orderId\": \"ord_\u2026\"\n  }\n}"
             },
             {
               "name": "404 missing seat",
@@ -355,11 +355,8 @@
                 "value": "application/json"
               },
               {
-
                 "key": "Authorization",
-
                 "value": "Bearer {{idToken}}"
-
               }
             ],
             "body": {
@@ -380,11 +377,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{idToken}}"
-
                   }
                 ],
                 "body": {
@@ -402,7 +396,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"holdId\": \"h_…\",\n  \"seatIds\": [\"A-12-07\"],\n  \"expiresAt\": \"…\"\n}"
+              "body": "{\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"],\n  \"expiresAt\": \"\u2026\"\n}"
             },
             {
               "name": "201 group seats",
@@ -414,11 +408,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{idToken}}"
-
                   }
                 ],
                 "body": {
@@ -436,7 +427,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"holdId\": \"h_…\",\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"],\n  \"expiresAt\": \"…\"\n}"
+              "body": "{\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-30\", \"A-12-31\"],\n  \"expiresAt\": \"\u2026\"\n}"
             },
             {
               "name": "409 conflict",
@@ -448,11 +439,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{adminIdToken}}"
-
                   }
                 ],
                 "body": {
@@ -482,11 +470,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{adminIdToken}}"
-
                   }
                 ],
                 "body": {
@@ -602,11 +587,8 @@
                 "value": "application/json"
               },
               {
-
                 "key": "Authorization",
-
                 "value": "Bearer {{idToken}}"
-
               },
               {
                 "key": "Idempotency-Key",
@@ -618,7 +600,7 @@
               "raw": "{\n  \"eventId\": \"{{eventId}}\",\n  \"holdId\": \"{{holdId}}\",\n  \"seatIds\": {{seatIdsJson}}\n}"
             },
             "url": "{{gatewayBase}}/orders",
-            "description": "Buy an existing hold. Run Holds → Hold seats first (sets holdId + seatIdsJson). Idempotency-Key required. Examples: retry / 400 / 409."
+            "description": "Buy an existing hold. Run Holds \u2192 Hold seats first (sets holdId + seatIdsJson). Idempotency-Key required. Examples: retry / 400 / 409."
           },
           "response": [
             {
@@ -631,11 +613,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{idToken}}"
-
                   },
                   {
                     "key": "Idempotency-Key",
@@ -657,7 +636,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"orderId\": \"ord_…\",\n  \"status\": \"PENDING\"\n}"
+              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\"\n}"
             },
             {
               "name": "202 same Idempotency-Key",
@@ -669,11 +648,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{idToken}}"
-
                   },
                   {
                     "key": "Idempotency-Key",
@@ -695,7 +671,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"orderId\": \"ord_…\",\n  \"status\": \"PENDING\"\n}"
+              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\"\n}"
             },
             {
               "name": "400 missing Idempotency-Key",
@@ -707,11 +683,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{idToken}}"
-
                   }
                 ],
                 "body": {
@@ -741,11 +714,8 @@
                     "value": "application/json"
                   },
                   {
-
                     "key": "Authorization",
-
                     "value": "Bearer {{adminIdToken}}"
-
                   },
                   {
                     "key": "Idempotency-Key",
@@ -767,9 +737,91 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"message\": \"order not acceptable\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_…\",\n  \"seatIds\": [\"A-12-07\"]\n}"
+              "body": "{\n  \"message\": \"order not acceptable\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"]\n}"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Phase 9c \u2014 TOKEN authorizer requires Cognito group `admin` at the edge. Fan (alice) \u2192 403; admin \u2192 501 stubs until Phase 11. Prereq: Login as alice / Login as admin.",
+      "item": [
+        {
+          "name": "Cancel event (alice \u2192 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aliceIdToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{apiBase}}/admin/events/{{eventId}}/cancel",
+            "description": "Fan JWT \u2014 admin authorizer Deny \u2192 403 before Lambda."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel event (admin \u2192 501)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminIdToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{apiBase}}/admin/events/{{eventId}}/cancel",
+            "description": "Admin JWT \u2014 authorizer Allow \u2192 cancel stub returns 501."
+          },
+          "response": []
+        },
+        {
+          "name": "List refunds (alice \u2192 403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aliceIdToken}}"
+              }
+            ],
+            "url": "{{apiBase}}/admin/events/{{eventId}}/refunds",
+            "description": "Fan JWT \u2014 403 at authorizer."
+          },
+          "response": []
+        },
+        {
+          "name": "List refunds (admin \u2192 501)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminIdToken}}"
+              }
+            ],
+            "url": "{{apiBase}}/admin/events/{{eventId}}/refunds",
+            "description": "Admin JWT \u2014 refunds stub returns 501."
+          },
+          "response": []
         }
       ]
     },
@@ -827,7 +879,7 @@
                   "value": "application/x-amz-json-1.1"
                 }
               ],
-              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"2026-10-24T11:36:12.172Z\\tb82accfa-…\\tINFO\\tverify-hold ok {\\n  orderId: 'ord_…',\\n  eventId: 'evt_001',\\n  holdId: 'h_…',\\n  seatIds: [ 'A-12-21' ]\\n}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/24/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"2026-10-24T11:36:12.172Z\\tb82accfa-\u2026\\tINFO\\tverify-hold ok {\\n  orderId: 'ord_\u2026',\\n  eventId: 'evt_001',\\n  holdId: 'h_\u2026',\\n  seatIds: [ 'A-12-21' ]\\n}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/24/[$LATEST]\u2026\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
             }
           ]
         }
@@ -836,7 +888,7 @@
     },
     {
       "name": "Domain events",
-      "description": "Phase 8 observe after MarkConfirmed: stream-relay → EventBridge → logger (8b) → SNS → SQS → notify-email → SES (8c/8d). MiniStack EB→CW Logs targets do not deliver.",
+      "description": "Phase 8 observe after MarkConfirmed: stream-relay \u2192 EventBridge \u2192 logger (8b) \u2192 SNS \u2192 SQS \u2192 notify-email \u2192 SES (8c/8d). MiniStack EB\u2192CW Logs targets do not deliver.",
       "item": [
         {
           "name": "Filter stream-relay logs",
@@ -889,7 +941,7 @@
                   "value": "application/x-amz-json-1.1"
                 }
               ],
-              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed published orderId=ord_… bus=gatehold-dev source=gatehold.orders\\\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed published orderId=ord_\u2026 bus=gatehold-dev source=gatehold.orders\\\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]\u2026\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
             }
           ]
         },
@@ -912,7 +964,7 @@
               "raw": "{\n  \"logGroupName\": \"{{orderConfirmedLoggerLogGroup}}\",\n  \"filterPattern\": \"OrderConfirmed received\",\n  \"limit\": 20\n}"
             },
             "url": "{{ministackBase}}/",
-            "description": "EventBridge rule target is order-confirmed-logger Lambda (not CW Logs — MiniStack does not deliver EB→Logs). Expect `OrderConfirmed received` with detail JSON."
+            "description": "EventBridge rule target is order-confirmed-logger Lambda (not CW Logs \u2014 MiniStack does not deliver EB\u2192Logs). Expect `OrderConfirmed received` with detail JSON."
           },
           "response": [
             {
@@ -944,7 +996,7 @@
                   "value": "application/x-amz-json-1.1"
                 }
               ],
-              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed received {\\\"id\\\":\\\"…\\\",\\\"source\\\":\\\"gatehold.orders\\\",\\\"detail-type\\\":\\\"OrderConfirmed\\\",\\\"detail\\\":{\\\"orderId\\\":\\\"ord_…\\\",\\\"eventId\\\":\\\"evt_001\\\",\\\"userId\\\":\\\"alice\\\",\\\"seatIds\\\":[\\\"A-12-07\\\"],\\\"confirmedAt\\\":\\\"…\\\"}}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]…\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
+              "body": "{\n  \"events\": [\n    {\n      \"timestamp\": 1792841772172,\n      \"message\": \"OrderConfirmed received {\\\"id\\\":\\\"\u2026\\\",\\\"source\\\":\\\"gatehold.orders\\\",\\\"detail-type\\\":\\\"OrderConfirmed\\\",\\\"detail\\\":{\\\"orderId\\\":\\\"ord_\u2026\\\",\\\"eventId\\\":\\\"evt_001\\\",\\\"userId\\\":\\\"alice\\\",\\\"seatIds\\\":[\\\"A-12-07\\\"],\\\"confirmedAt\\\":\\\"\u2026\\\"}}\\n\",\n      \"ingestionTime\": 1792841772172,\n      \"logStreamName\": \"2026/10/27/[$LATEST]\u2026\"\n    }\n  ],\n  \"searchedLogStreams\": []\n}"
             }
           ]
         },
@@ -954,7 +1006,7 @@
             "method": "GET",
             "header": [],
             "url": "{{ministackBase}}/_ministack/sqs/messages",
-            "description": "Phase 8c/8d — notify queue is drained by notify-email. Usually empty after success; check List SES messages instead. DLQ if SendEmail keeps failing."
+            "description": "Phase 8c/8d \u2014 notify queue is drained by notify-email. Usually empty after success; check List SES messages instead. DLQ if SendEmail keeps failing."
           },
           "response": [
             {
@@ -996,7 +1048,7 @@
               "raw": "{\n  \"logGroupName\": \"{{notifyEmailLogGroup}}\",\n  \"filterPattern\": \"OrderConfirmed email sent\",\n  \"limit\": 20\n}"
             },
             "url": "{{ministackBase}}/",
-            "description": "Phase 8d — Go notify-email after SES SendEmail. Expect `OrderConfirmed email sent orderId=…`."
+            "description": "Phase 8d \u2014 Go notify-email after SES SendEmail. Expect `OrderConfirmed email sent orderId=\u2026`."
           },
           "response": []
         },
@@ -1006,7 +1058,7 @@
             "method": "GET",
             "header": [],
             "url": "{{ministackBase}}/_ministack/ses/messages",
-            "description": "Phase 8d — MiniStack SES artifact after confirm. Expect From noreply@gatehold.local, To {userId}@fans.gatehold.local, subject Order confirmed: …"
+            "description": "Phase 8d \u2014 MiniStack SES artifact after confirm. Expect From noreply@gatehold.local, To {userId}@fans.gatehold.local, subject Order confirmed: \u2026"
           },
           "response": [
             {
@@ -1025,7 +1077,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"messages\": [\n    {\n      \"Source\": \"noreply@gatehold.local\",\n      \"Destination\": { \"ToAddresses\": [\"alice@fans.gatehold.local\"] },\n      \"Subject\": \"Order confirmed: ord_…\"\n    }\n  ]\n}"
+              "body": "{\n  \"messages\": [\n    {\n      \"Source\": \"noreply@gatehold.local\",\n      \"Destination\": { \"ToAddresses\": [\"alice@fans.gatehold.local\"] },\n      \"Subject\": \"Order confirmed: ord_\u2026\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -1054,7 +1106,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"edition\": \"light\",\n  \"version\": \"…\",\n  \"services\": { \"events\": \"available\", \"dynamodbstreams\": \"available\", \"logs\": \"available\" }\n}"
+              "body": "{\n  \"edition\": \"light\",\n  \"version\": \"\u2026\",\n  \"services\": { \"events\": \"available\", \"dynamodbstreams\": \"available\", \"logs\": \"available\" }\n}"
             }
           ]
         },
@@ -1096,7 +1148,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"TableName\": \"gatehold-dev-orders\",\n  \"Key\": { \"orderId\": { \"S\": \"ord_…\" } }\n}"
+                  "raw": "{\n  \"TableName\": \"gatehold-dev-orders\",\n  \"Key\": { \"orderId\": { \"S\": \"ord_\u2026\" } }\n}"
                 },
                 "url": "http://127.0.0.1:4566/"
               },
@@ -1109,7 +1161,7 @@
                   "value": "application/x-amz-json-1.0"
                 }
               ],
-              "body": "{\n  \"Item\": {\n    \"orderId\": { \"S\": \"ord_…\" },\n    \"status\": { \"S\": \"CONFIRMED\" },\n    \"eventId\": { \"S\": \"evt_001\" },\n    \"userId\": { \"S\": \"alice\" }\n  }\n}"
+              "body": "{\n  \"Item\": {\n    \"orderId\": { \"S\": \"ord_\u2026\" },\n    \"status\": { \"S\": \"CONFIRMED\" },\n    \"eventId\": { \"S\": \"evt_001\" },\n    \"userId\": { \"S\": \"alice\" }\n  }\n}"
             }
           ]
         }
@@ -1217,7 +1269,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "200 idempotent retry",
@@ -1244,7 +1296,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "400 bad request",
@@ -1286,7 +1338,7 @@
                 "url": "{{paymentBase}}/v1/payments/authorize",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"amount\": 9999,\n  \"currency\": \"USD\"\n}"
+                  "raw": "{\n  \"idempotencyKey\": \"pay:auth:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"amount\": 9999,\n  \"currency\": \"USD\"\n}"
                 }
               },
               "status": "Conflict",
@@ -1360,7 +1412,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "(empty body — outcome stored; GET Status with pay:auth:{{paymentOrderId}})"
+              "body": "(empty body \u2014 outcome stored; GET Status with pay:auth:{{paymentOrderId}})"
             },
             {
               "name": "400 missing Content-Type",
@@ -1417,7 +1469,7 @@
                   "    pm.environment.set('paymentStatusKey', 'pay:auth:' + j.orderId);",
                   "  } catch (e) {}",
                   "}",
-                  "// timeout chaos: empty body but store may have accepted — run Status next",
+                  "// timeout chaos: empty body but store may have accepted \u2014 run Status next",
                   "if (pm.environment.get('chaosForce') === 'timeout') {",
                   "  pm.environment.set('paymentStatusKey', 'pay:auth:' + pm.environment.get('paymentOrderId'));",
                   "}"
@@ -1508,7 +1560,7 @@
               "body": "{\n  \"error\": \"injected 500\",\n  \"code\": \"CHAOS_ERROR\"\n}"
             },
             {
-              "name": "timeout empty body — use Status",
+              "name": "timeout empty body \u2014 use Status",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -1536,7 +1588,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "(empty — then GET Status ?idempotencyKey=pay:auth:{{paymentOrderId}})"
+              "body": "(empty \u2014 then GET Status ?idempotencyKey=pay:auth:{{paymentOrderId}})"
             }
           ]
         },
@@ -1555,7 +1607,7 @@
               "raw": "{\n  \"idempotencyKey\": \"pay:capture:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
             },
             "url": "{{paymentBase}}/v1/payments/capture",
-            "description": "Capture a prior authorization. Run Authorize first. Sets paymentStatusKey to pay:capture:…. Happy path: Authorize → Capture."
+            "description": "Capture a prior authorization. Run Authorize first. Sets paymentStatusKey to pay:capture:\u2026. Happy path: Authorize \u2192 Capture."
           },
           "response": [
             {
@@ -1583,7 +1635,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:capture:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"CAPTURED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:capture:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"CAPTURED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "404 unknown authorizationId",
@@ -1698,7 +1750,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:void:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"VOIDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:void:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"VOIDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "404 unknown authorizationId",
@@ -1785,7 +1837,7 @@
               "raw": "{\n  \"idempotencyKey\": \"pay:refund:{{paymentOrderId}}\",\n  \"orderId\": \"{{paymentOrderId}}\",\n  \"authorizationId\": \"{{paymentAuthId}}\",\n  \"amount\": {{paymentAmount}},\n  \"currency\": \"USD\"\n}"
             },
             "url": "{{paymentBase}}/v1/payments/refund",
-            "description": "Return captured funds. Run Authorize → Capture first. Requires CAPTURED."
+            "description": "Return captured funds. Run Authorize \u2192 Capture first. Requires CAPTURED."
           },
           "response": [
             {
@@ -1813,7 +1865,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:refund:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"REFUNDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:refund:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"REFUNDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "409 not captured yet",
@@ -1899,7 +1951,7 @@
               "originalRequest": {
                 "method": "GET",
                 "header": [],
-                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:auth:ord_…"
+                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:auth:ord_\u2026"
               },
               "status": "OK",
               "code": 200,
@@ -1910,14 +1962,14 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:auth:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"AUTHORIZED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "200 by capture key after refund",
               "originalRequest": {
                 "method": "GET",
                 "header": [],
-                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:capture:ord_…"
+                "url": "{{paymentBase}}/v1/payments/status?idempotencyKey=pay:capture:ord_\u2026"
               },
               "status": "OK",
               "code": 200,
@@ -1928,7 +1980,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"idempotencyKey\": \"pay:capture:ord_…\",\n  \"orderId\": \"ord_…\",\n  \"authorizationId\": \"auth_…\",\n  \"paymentId\": \"pay_…\",\n  \"status\": \"REFUNDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
+              "body": "{\n  \"idempotencyKey\": \"pay:capture:ord_\u2026\",\n  \"orderId\": \"ord_\u2026\",\n  \"authorizationId\": \"auth_\u2026\",\n  \"paymentId\": \"pay_\u2026\",\n  \"status\": \"REFUNDED\",\n  \"amount\": 5000,\n  \"currency\": \"USD\"\n}"
             },
             {
               "name": "404 unknown key",

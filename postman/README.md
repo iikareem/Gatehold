@@ -16,6 +16,7 @@
 | **Health** | Liveness, Get seat | Smoke / inspect seat (`AVAILABLE` → `HELD` → `PAYING` → `SOLD`) |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept order | `POST /orders` → `PAYING` + `PENDING` (saga starts) |
+| **Admin** | Cancel / List refunds | Fan JWT → 403; admin JWT → 501 stubs (Phase 9c) |
 | **Saga logs** | Filter verify-hold logs | MiniStack CloudWatch for VerifyHold |
 | **Domain events** | stream-relay + logger + SES messages, Get order | Phase 8 observe after confirm |
 | **Mock payment** | Authorize → Capture/Void/Refund + Status | Compose `:8090` (or host `go run`) |
@@ -31,6 +32,8 @@ Prereq: deploy + `npm run seed:auth` (creates `alice` / `admin`, password `Gateh
 3. **Auth → Login as admin** — same; `cognitoGroups` should be `["admin"]`.
 
 Holds/orders require `Authorization: Bearer {{idToken}}` (run Auth → Login as alice first).
+
+Admin routes use a TOKEN authorizer (JWT + `admin` group): **Admin → Cancel/List as alice** → 403; **as admin** → 501 until Phase 11.
 
 ### Happy path (API Gateway + saga + Phase 8)
 

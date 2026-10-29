@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Auth (Phase 9a Cognito login), Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAuth: seed:auth then Login as alice|admin → saves idToken (API still X-User-Id until 9b).\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8: after confirm, Domain events → stream-relay + logger + List SES messages.",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Auth (Phase 9a Cognito login), Health, Holds, Orders, Saga logs, Domain events, Mock payment. Variants under Examples.\\n\\nAuth: seed:auth then Login as alice|admin → saves idToken. Holds/Orders use Authorization: Bearer {{idToken}}.\\nAPI flow: Hold seats → Accept order → Get seat (PAYING → SOLD after saga) → Saga logs / Domain events.\\nMock payment: compose service on :8090 (or go run). Health → Authorize → Capture|Void → Refund → Status.\\nPhase 8: after confirm, Domain events → stream-relay + logger + List SES messages.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "Auth",
-      "description": "Phase 9a Cognito login against MiniStack. Prereq: deploy + `npm run seed:auth` (users alice/admin, password Gatehold1!). Set `userPoolClientId` from .cdk-outputs.json UserPoolClientId. Saves `idToken` (and aliceIdToken / adminIdToken). API still uses X-User-Id until Phase 9b.",
+      "description": "Cognito login against MiniStack. Prereq: deploy + `npm run seed:auth` (users alice/admin, password Gatehold1!). Set `userPoolClientId` from .cdk-outputs.json UserPoolClientId. Saves `idToken` (and aliceIdToken / adminIdToken). Use Bearer idToken on holds/orders.",
       "item": [
         {
           "name": "Login as alice",
@@ -355,8 +355,11 @@
                 "value": "application/json"
               },
               {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
+
+                "key": "Authorization",
+
+                "value": "Bearer {{idToken}}"
+
               }
             ],
             "body": {
@@ -377,8 +380,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "{{userId}}"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{idToken}}"
+
                   }
                 ],
                 "body": {
@@ -408,8 +414,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "{{userId}}"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{idToken}}"
+
                   }
                 ],
                 "body": {
@@ -439,8 +448,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "bob"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{adminIdToken}}"
+
                   }
                 ],
                 "body": {
@@ -470,8 +482,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "bob"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{adminIdToken}}"
+
                   }
                 ],
                 "body": {
@@ -587,8 +602,11 @@
                 "value": "application/json"
               },
               {
-                "key": "X-User-Id",
-                "value": "{{userId}}"
+
+                "key": "Authorization",
+
+                "value": "Bearer {{idToken}}"
+
               },
               {
                 "key": "Idempotency-Key",
@@ -613,8 +631,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "{{userId}}"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{idToken}}"
+
                   },
                   {
                     "key": "Idempotency-Key",
@@ -648,8 +669,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "{{userId}}"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{idToken}}"
+
                   },
                   {
                     "key": "Idempotency-Key",
@@ -683,8 +707,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "{{userId}}"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{idToken}}"
+
                   }
                 ],
                 "body": {
@@ -714,8 +741,11 @@
                     "value": "application/json"
                   },
                   {
-                    "key": "X-User-Id",
-                    "value": "bob"
+
+                    "key": "Authorization",
+
+                    "value": "Bearer {{adminIdToken}}"
+
                   },
                   {
                     "key": "Idempotency-Key",

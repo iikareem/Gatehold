@@ -30,7 +30,7 @@ Prereq: deploy + `npm run seed:auth` (creates `alice` / `admin`, password `Gateh
 2. **Auth → Login as alice** — Tests pass; env gets `idToken`, `aliceIdToken`, `cognitoSub`, `cognitoUsername`.
 3. **Auth → Login as admin** — same; `cognitoGroups` should be `["admin"]`.
 
-API holds/orders still use `X-User-Id` until Phase 9b (Bearer not required yet).
+Holds/orders require `Authorization: Bearer {{idToken}}` (run Auth → Login as alice first).
 
 ### Happy path (API Gateway + saga + Phase 8)
 

@@ -477,12 +477,37 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Goal:** Config out of plain hardcoding where it matters; roles match the known call graph.
 
-**Build**
+#### 9d.1 — Emulator + Config construct (no behavior change)
 
-- Secrets Manager for mock-payment URL; SSM for hold TTL / group cap / refund rate
-- Audit and narrow Lambda / state-machine grants; document the permission map
+**Build:** StackPort `secretsmanager` + `ssm`; `Config` construct (mock-payment secret + SSM hold TTL / max seats / refund rate); outputs only — Lambdas unchanged.
 
-**Verify:** full purchase path still works after narrowing
+**Verify:** deploy; secret + params exist; hold → order → saga still via existing env.
+
+**Status:** Done — `Config` construct, StackPort `secretsmanager`+`ssm`, outputs; Lambdas still on env/constants.
+
+#### 9d.2 — Secrets Manager → payment Lambdas
+
+**Build:** Payment steps resolve URL via `GetSecretValue` (secret ARN in env); `grantRead` only those four; drop plain `MOCK_PAYMENT_URL` env.
+
+**Verify:** happy-path purchase hits mock via secret.
+
+**Status:** Not started.
+
+#### 9d.3 — SSM → hold TTL + seat cap (+ refund-rate stub)
+
+**Build:** Hold duration + max seats from Parameter Store; refund-rate param unused until Phase 11.
+
+**Verify:** `expiresAt` / over-cap 400; purchase path green.
+
+**Status:** Not started.
+
+#### 9d.4 — Least-privilege IAM + permission map
+
+**Build:** Narrow over-broad grants; document Lambda → actions → resources.
+
+**Verify:** full purchase + notify path after narrowing.
+
+**Status:** Not started.
 
 **Learn (whole Phase 9)**
 
@@ -672,7 +697,7 @@ Use these as “I can show this” moments while learning:
                                          ├── 9a Cognito pool + users
                                          │    └── 9b JWT authorizer + claims
                                          │         └── 9c Admin routes (501)
-                                         │              └── 9d Secrets + IAM
+                                         │              └── 9d.1 Config → 9d.2 Secret → 9d.3 SSM → 9d.4 IAM
                                          ├── 10 Signed tickets
                                          └── 11 Cancel + refunds
                                               └── 12 Reconciler + auditor
@@ -705,7 +730,10 @@ Copy into a notebook or tick in place:
 - [x] Phase 9a — Cognito pool + local users
 - [ ] Phase 9b — JWT authorizer + identity from claims
 - [ ] Phase 9c — Admin group + reserved admin routes
-- [ ] Phase 9d — Secrets + least-privilege IAM
+- [x] Phase 9d.1 — Config construct + StackPort secrets/ssm
+- [ ] Phase 9d.2 — Secrets Manager → payment Lambdas
+- [ ] Phase 9d.3 — SSM hold TTL + seat cap
+- [ ] Phase 9d.4 — Least-privilege IAM + permission map
 - [ ] Phase 10 — Signed tickets
 - [ ] Phase 11 — Cancellation and mass refunds
 - [ ] Phase 12 — Reconciler and auditor

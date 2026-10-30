@@ -38,6 +38,13 @@ export {
   mockPaymentBaseUrl,
 } from "./secrets";
 export {
+  createSsmClient,
+  getParameterString,
+  holdDurationMs,
+  maxHoldSeats,
+  DEFAULT_MAX_HOLD_SEATS,
+} from "./ssm";
+export {
   HOLD_DURATION_MS,
   buildHoldSeatUpdateInput,
   buildHoldSeatsTransactWriteInput,

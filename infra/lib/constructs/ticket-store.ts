@@ -13,7 +13,7 @@ export interface TicketStoreProps {
  *
  * Private S3 bucket holds `{ payload, signature }` JSON per ticket.
  * Asymmetric KMS key (SIGN_VERIFY) signs/verifies; private key never leaves KMS.
- * IssueTicket / get-order / verify wire grants in later slices.
+ * Grants: IssueTicket (Sign+Put), get-order (GetObject), verify-ticket (Verify).
  */
 export class TicketStore extends Construct {
   readonly ticketsBucket: s3.Bucket;

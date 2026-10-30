@@ -31,7 +31,12 @@ export { callerUserId, hasAdminGroup, ADMIN_GROUP_NAME } from "./auth";
 export { createDynamoDBClient, getDocClient } from "./dynamodb";
 export { createSqsClient, getSqsClient } from "./sqs";
 export { createSfnClient, getSfnClient } from "./sfn";
-export { createKmsClient, getKmsClient, signTicketMessage } from "./kms";
+export {
+  createKmsClient,
+  getKmsClient,
+  signTicketMessage,
+  verifyTicketMessage,
+} from "./kms";
 export {
   createS3Client,
   getS3Client,
@@ -102,6 +107,12 @@ export {
   type TicketArtifact,
   type BuildTicketPayloadParams,
 } from "./ticket";
+export {
+  verifyTicketArtifact,
+  isTicketPayload,
+  type TicketVerifyRejectReason,
+  type TicketVerifyResult,
+} from "./ticket-verify";
 export {
   authorizeWithProvider,
   captureWithProvider,

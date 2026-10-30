@@ -506,6 +506,7 @@ Write endpoints require a Cognito JWT. User ID comes from the token, never the r
 | `POST` | `/events/{eventId}/holds` | Hold seats (`seatIds` or `groupSize`). Returns `holdId`, `seatIds`, `expiresAt`, or `409` |
 | `POST` | `/orders` | Submit a purchase for a hold. Requires `Idempotency-Key`. Returns `202` |
 | `GET` | `/orders/{orderId}` | Poll order status; when `CONFIRMED`, short-lived ticket download URLs |
+| `POST` | `/tickets/verify` | Simulated gate: `{ payload, signature }` → `valid` true/false |
 | `POST` | `/admin/events/{eventId}/cancel` | Cancel event and start refund batch (admin) |
 | `GET` | `/admin/events/{eventId}/refunds` | Refund batch progress (admin) |
 
@@ -807,7 +808,7 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 10a: TicketStore (S3 + KMS) + contracts / helpers
 - [x] Phase 10b: IssueTicket KMS sign + S3 artifacts
 - [x] Phase 10c: GET /orders/{orderId} + presigned ticket URLs
-- [ ] Phase 10d: verify helper
+- [x] Phase 10d: POST /tickets/verify (KMS Verify + event status)
 - [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
 - [ ] Phase 12: Reconciler + independent auditor
 - [ ] Phase 13: Dashboards, alarms, tracing

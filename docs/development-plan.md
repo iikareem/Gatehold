@@ -604,7 +604,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 - Download via 10c → accept; mutate payload → reject; force event `CANCELLED` → reject
 
-**Status:** Not started.
+**Status:** Done — `verifyTicketArtifact` + `POST /tickets/verify`; tests for valid / tampered / cancelled.
 
 ---
 
@@ -800,7 +800,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 10a — Contracts + TicketStore (S3 + KMS) + shared helpers
 - [x] Phase 10b — Real IssueTicket (sign + S3)
 - [x] Phase 10c — GET order + presigned URLs
-- [ ] Phase 10d — Verify helper
+- [x] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds
 - [ ] Phase 12 — Reconciler and auditor
 - [ ] Phase 13 — Observability

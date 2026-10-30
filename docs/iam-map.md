@@ -5,9 +5,9 @@ Least-privilege snapshot after the 9d.4 audit. Grants live at construct edges
 `config`, `ticket-store`). Prefer CDK `grant*` helpers; add explicit statements
 only when the helper is too wide or missing an action the call graph needs.
 
-**Phase 10a/b/c:** `TicketStore` provisions tickets bucket + signing key.
-- **issue-ticket (10b):** S3 `PutObject` tickets · KMS `Sign` (done)
-- **get-order (10c):** DynamoDB **R** orders · S3 `GetObject` / presign tickets (done)
+**Phase 10 (done):** `TicketStore` provisions tickets bucket + signing key.
+- **issue-ticket (10b):** S3 `PutObject` tickets · KMS `Sign`
+- **get-order (10c):** DynamoDB **R** orders · S3 `GetObject` / presign tickets
 - **verify-ticket (10d):** KMS `Verify` · DynamoDB **R** events
 
 **Legend:** R = read · W = write (+ `TransactWriteItems` where noted) · RW = read+write
@@ -19,6 +19,7 @@ only when the helper is too wide or missing an action the call graph needs.
 | **hold-sweeper** | DynamoDB **RW** seats (`Scan` + `UpdateItem`) |
 | **create-order** | DynamoDB **R** events · **W+Transact** seats · **W+Transact** orders · **RW** idempotency · SQS **SendMessage** orders queue · SSM **GetParameter** max-seats |
 | **get-order** | DynamoDB **R** orders · S3 **GetObject** tickets bucket (presigned download URLs) |
+| **verify-ticket** | DynamoDB **R** events · KMS **Verify** ticket key |
 | **saga-starter** | DynamoDB **W** orders (`UpdateItem` executionArn) · SFN **StartExecution** purchase saga · SQS consume (event source) |
 | **verify-hold** | DynamoDB **R** events, seats, orders |
 | **authorize-payment** | DynamoDB **W** ledger (`PutItem`) · **W** orders (`UpdateItem` amount) · Secrets Manager **GetSecretValue** mock-payment |

@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as kms from "aws-cdk-lib/aws-kms";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { Construct } from "constructs";
 import { ADMIN_GROUP_NAME } from "./auth";
@@ -21,6 +22,8 @@ export interface HttpApiProps {
   createOrderFn: lambda.IFunction;
   /** Phase 10c — GET /orders/{orderId} (owner + ticket presign). */
   getOrderFn: lambda.IFunction;
+  /** Phase 10d — ticket SIGN_VERIFY key for POST /tickets/verify. */
+  ticketSigningKey: kms.IKey;
   /** Cognito pool used by the REST Cognito authorizer (Phase 9b). */
   userPool: cognito.IUserPool;
   /** App client id — IdToken `aud` checked by the admin authorizer (9c). */
@@ -34,11 +37,12 @@ export interface HttpApiProps {
  *
  * Holds/orders: Cognito JWT authorizer (any signed-in user).
  * Admin routes: TOKEN Lambda authorizer (JWT + `admin` group) — deny before stubs.
- * Health stays open.
+ * Health + ticket verify stay open (gate uses crypto, not fan JWT).
  */
 export class HttpApi extends Construct {
   readonly api: apigateway.RestApi;
   readonly healthFn: lambda.IFunction;
+  readonly verifyTicketFn: lambda.IFunction;
   readonly cognitoAuthorizer: apigateway.CognitoUserPoolsAuthorizer;
   readonly adminAuthorizerFn: lambda.IFunction;
   readonly adminAuthorizer: apigateway.TokenAuthorizer;
@@ -55,6 +59,7 @@ export class HttpApi extends Construct {
       holdSeatFn,
       createOrderFn,
       getOrderFn,
+      ticketSigningKey,
       userPool,
       userPoolClient,
       userPoolIssuer,
@@ -74,6 +79,27 @@ export class HttpApi extends Construct {
 
     // health only GetItem on seats (?eventId=&seatId=); events table unused.
     seatsTable.grantReadData(this.healthFn);
+
+    // Phase 10d — simulated gate: KMS.Verify + event not CANCELLED.
+    this.verifyTicketFn = createNodeFn(this, "VerifyTicketFn", {
+      stage,
+      name: "verify-ticket",
+      entry: path.join(projectRoot, "services/verify-ticket/src/handler.ts"),
+      environment: {
+        STAGE: stage,
+        EVENTS_TABLE_NAME: eventsTable.tableName,
+        TICKET_SIGNING_KEY_ID: ticketSigningKey.keyId,
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
+    });
+    eventsTable.grantReadData(this.verifyTicketFn);
+    ticketSigningKey.grant(this.verifyTicketFn, "kms:Verify");
 
     this.adminAuthorizerFn = createNodeFn(this, "AdminAuthorizerFn", {
       stage,
@@ -185,6 +211,15 @@ export class HttpApi extends Construct {
       new apigateway.LambdaIntegration(getOrderFn),
       signedInMethodOptions,
     );
+
+    // POST /tickets/verify — open (simulated gate; trust is signature + event)
+    const tickets = this.api.root.addResource("tickets");
+    tickets
+      .addResource("verify")
+      .addMethod(
+        "POST",
+        new apigateway.LambdaIntegration(this.verifyTicketFn),
+      );
 
     // /admin/* (9c) — JWT + admin group at the edge; cancel/refund stubs until Phase 11
     const adminRoot = this.api.root.addResource("admin");

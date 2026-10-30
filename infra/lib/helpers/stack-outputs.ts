@@ -52,6 +52,9 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "HealthFunctionName", {
     value: http.healthFn.functionName,
   });
+  new cdk.CfnOutput(stack, "VerifyTicketFunctionName", {
+    value: http.verifyTicketFn.functionName,
+  });
   new cdk.CfnOutput(stack, "HoldSeatFunctionName", {
     value: holds.holdSeatFn.functionName,
   });

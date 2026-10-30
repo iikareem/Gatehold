@@ -362,6 +362,7 @@ Lambda → actions → resources: see [iam-map.md](./iam-map.md).
 - [x] StackPort: add `kms` to `STACKPORT_SERVICES` (recreate stackport if it was already up)
 - [x] Phase 10b: IssueTicket signs + puts `tickets/{ticketId}.json`; env `TICKETS_BUCKET` / `TICKET_SIGNING_KEY_ID`
 - [x] Phase 10c: `GET /orders/{orderId}` (get-order) — owner check; presigned ticket URLs when `CONFIRMED`
+- [x] Phase 10d: `POST /tickets/verify` — KMS.Verify + reject if event `CANCELLED`
 
 ### Ticket store smoke (optional, after deploy)
 

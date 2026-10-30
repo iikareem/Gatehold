@@ -585,8 +585,46 @@ No private or public key material in the object. Sign creates the signature; Ver
 
 1. `KMS.Verify` over `ticketSigningMessage(payload)` with the ticket signing key → must succeed.
 2. Load event `payload.eventId` → reject if `status` is `CANCELLED` (even when the signature is valid).
+   - Missing event → reject (`event_not_found`).
+   - `ON_SALE` / `CANCELLING` still accept (only `CANCELLED` fails this check).
 
-Shared helpers: `buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`, `TICKET_SIGNING_ALGORITHM` in `services/shared/src/ticket.ts`.
+Shared helpers: `buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`, `verifyTicketArtifact`, `TICKET_SIGNING_ALGORITHM` in `services/shared`.
+
+### POST /tickets/verify (Phase 10d — simulated gate)
+
+Scanner / Postman sends the ticket artifact body (same shape as the S3 object). **No Cognito** — trust is the signature + event status.
+
+**Request body**
+
+```json
+{
+  "payload": {
+    "ticketId": "tkt:ord_1:A-12-07",
+    "orderId": "ord_1",
+    "eventId": "evt_001",
+    "seatId": "A-12-07",
+    "userId": "alice"
+  },
+  "signature": "<base64 KMS signature>"
+}
+```
+
+**Success / reject — always `200` with a `valid` flag** (easy for scanners):
+
+```json
+{ "valid": true, "ticketId": "tkt:…", "eventId": "evt_001", "seatId": "A-12-07", "orderId": "ord_…" }
+```
+
+```json
+{ "valid": false, "reason": "invalid_signature" | "event_cancelled" | "event_not_found" }
+```
+
+| Status | When |
+|---|---|
+| `400` | Missing/invalid JSON, bad `payload` shape, empty `signature` |
+| `200` | Business accept or reject (`valid` true/false) |
+
+Env: `EVENTS_TABLE_NAME`, `TICKET_SIGNING_KEY_ID`. IAM: DynamoDB **R** events · KMS `Verify`.
 
 ### IssueTicket (saga Task — Phase 10b)
 

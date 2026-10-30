@@ -76,6 +76,7 @@ export class GateholdStack extends cdk.Stack {
       holdSeatFn: holds.holdSeatFn,
       createOrderFn: orders.createOrderFn,
       getOrderFn: orders.getOrderFn,
+      ticketSigningKey: tickets.signingKey,
       userPool: auth.userPool,
       userPoolClient: auth.userPoolClient,
       userPoolIssuer: auth.issuerUrl,

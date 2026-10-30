@@ -846,6 +846,113 @@
       ]
     },
     {
+      "name": "Tickets",
+      "description": "Phase 10d \u2014 simulated gate. POST /tickets/verify with S3 artifact body (payload + signature). No Authorization header. Download via Orders \u2192 Get order first.",
+      "item": [
+        {
+          "name": "Verify ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {\n    \"ticketId\": \"tkt:{{orderId}}:{{seatId}}\",\n    \"orderId\": \"{{orderId}}\",\n    \"eventId\": \"{{eventId}}\",\n    \"seatId\": \"{{seatId}}\",\n    \"userId\": \"{{cognitoSub}}\"\n  },\n  \"signature\": \"{{ticketSignature}}\"\n}"
+            },
+            "url": "{{gatewayBase}}/tickets/verify",
+            "description": "Paste real payload+signature from the S3 ticket JSON (downloadUrl from Get order). Expect valid:true. Mutate a payload field \u2192 invalid_signature. Force event CANCELLED in Dynamo \u2192 event_cancelled."
+          },
+          "response": [
+            {
+              "name": "200 valid",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"ticketId\": \"tkt:ord_\u2026:A-12-07\",\n    \"orderId\": \"ord_\u2026\",\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"userId\": \"alice-sub\"\n  },\n  \"signature\": \"\u2026\"\n}"
+                },
+                "url": "{{gatewayBase}}/tickets/verify"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"valid\": true,\n  \"ticketId\": \"tkt:ord_\u2026:A-12-07\",\n  \"eventId\": \"evt_001\",\n  \"seatId\": \"A-12-07\",\n  \"orderId\": \"ord_\u2026\"\n}"
+            },
+            {
+              "name": "200 invalid_signature",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"ticketId\": \"tkt:ord_\u2026:A-12-07\",\n    \"orderId\": \"ord_\u2026\",\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"TAMPERED\",\n    \"userId\": \"alice-sub\"\n  },\n  \"signature\": \"\u2026\"\n}"
+                },
+                "url": "{{gatewayBase}}/tickets/verify"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"valid\": false,\n  \"reason\": \"invalid_signature\"\n}"
+            },
+            {
+              "name": "200 event_cancelled",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"payload\": {\n    \"ticketId\": \"tkt:ord_\u2026:A-12-07\",\n    \"orderId\": \"ord_\u2026\",\n    \"eventId\": \"evt_001\",\n    \"seatId\": \"A-12-07\",\n    \"userId\": \"alice-sub\"\n  },\n  \"signature\": \"\u2026\"\n}"
+                },
+                "url": "{{gatewayBase}}/tickets/verify"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"valid\": false,\n  \"reason\": \"event_cancelled\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Admin",
       "description": "Phase 9c \u2014 TOKEN authorizer requires Cognito group `admin` at the edge. Fan (alice) \u2192 403; admin \u2192 501 stubs until Phase 11. Prereq: Login as alice / Login as admin.",
       "item": [

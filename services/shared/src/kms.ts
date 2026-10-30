@@ -1,4 +1,4 @@
-import { KMSClient, SignCommand } from "@aws-sdk/client-kms";
+import { KMSClient, SignCommand, VerifyCommand } from "@aws-sdk/client-kms";
 import { TICKET_SIGNING_ALGORITHM } from "./ticket";
 
 /**
@@ -53,4 +53,43 @@ export async function signTicketMessage(
     throw new Error("KMS Sign returned empty Signature");
   }
   return Buffer.from(result.Signature).toString("base64");
+}
+
+/**
+ * Verify a base64 signature over a UTF-8 message with the ticket key.
+ * Returns false for invalid / mismatched signatures (does not throw).
+ */
+export async function verifyTicketMessage(
+  keyId: string,
+  message: string,
+  signatureBase64: string,
+  client: KMSClient = getKmsClient(),
+): Promise<boolean> {
+  try {
+    const result = await client.send(
+      new VerifyCommand({
+        KeyId: keyId,
+        Message: Buffer.from(message, "utf8"),
+        MessageType: "RAW",
+        Signature: Buffer.from(signatureBase64, "base64"),
+        SigningAlgorithm: TICKET_SIGNING_ALGORITHM,
+      }),
+    );
+    return result.SignatureValid === true;
+  } catch (err) {
+    if (isInvalidSignatureError(err)) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+function isInvalidSignatureError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = (err as { name?: string }).name;
+  return (
+    name === "KMSInvalidSignatureException" ||
+    name === "InvalidSignatureException" ||
+    name === "InvalidCiphertextException"
+  );
 }

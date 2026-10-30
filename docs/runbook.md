@@ -350,6 +350,10 @@ curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
 curl -sS http://localhost:4566/_ministack/ses/messages | jq .
 ```
 
+## IAM map (Phase 9d.4)
+
+Lambda → actions → resources: see [iam-map.md](./iam-map.md).
+
 ## Phase 9a checklist
 
 - [x] `Auth` construct — UserPool `gatehold-{stage}`, app client (password auth), group `admin`

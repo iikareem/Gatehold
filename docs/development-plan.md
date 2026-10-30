@@ -507,7 +507,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** full purchase + notify path after narrowing.
 
-**Status:** Not started.
+**Status:** Done — SES Send scoped to From identity; unused health events grant removed; R/W → write-only where call graph allows; `docs/iam-map.md`.
 
 **Learn (whole Phase 9)**
 
@@ -733,7 +733,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 9d.1 — Config construct + StackPort secrets/ssm
 - [x] Phase 9d.2 — Secrets Manager → payment Lambdas
 - [x] Phase 9d.3 — SSM hold TTL + seat cap
-- [ ] Phase 9d.4 — Least-privilege IAM + permission map
+- [x] Phase 9d.4 — Least-privilege IAM + permission map
 - [ ] Phase 10 — Signed tickets
 - [ ] Phase 11 — Cancellation and mass refunds
 - [ ] Phase 12 — Reconciler and auditor

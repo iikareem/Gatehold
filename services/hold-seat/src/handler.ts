@@ -7,16 +7,20 @@ import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import {
   buildHoldSeatsTransactWriteInput,
   callerUserId,
+  DEFAULT_MAX_HOLD_SEATS,
   getDocClient,
+  holdDurationMs,
   holdExpiresAt,
+  maxHoldSeats,
   requireEnv,
 } from "../../shared/src";
 
-/** Max seats per hold request (Phase 3 seatIds path). */
-export const MAX_HOLD_SEATS = 8;
+/** Default max seats (runtime cap comes from SSM via maxHoldSeats). */
+export const MAX_HOLD_SEATS = DEFAULT_MAX_HOLD_SEATS;
 
 /**
- * Phase 3 — hold 1..MAX_HOLD_SEATS seats via TransactWriteItems.
+ * Phase 3 / 9d.3 — hold 1..N seats via TransactWriteItems.
+ * TTL + seat cap from SSM Parameter Store (env overrides for unit tests).
  * Identity: Cognito JWT `sub` from API Gateway authorizer (Phase 9b).
  */
 export async function handler(
@@ -33,7 +37,8 @@ export async function handler(
     return json(401, { message: "unauthorized" });
   }
 
-  const parsed = parseHoldBody(event.body);
+  const seatCap = await maxHoldSeats();
+  const parsed = parseHoldBody(event.body, seatCap);
   if (!parsed.ok) {
     return json(400, { message: parsed.message });
   }
@@ -41,7 +46,8 @@ export async function handler(
 
   const nowMs = Date.now();
   const now = new Date(nowMs).toISOString();
-  const expiresAt = holdExpiresAt(nowMs);
+  const durationMs = await holdDurationMs();
+  const expiresAt = holdExpiresAt(nowMs, durationMs);
   const holdId = `h_${randomUUID()}`;
 
   const transactInput = buildHoldSeatsTransactWriteInput({
@@ -77,6 +83,7 @@ export async function handler(
 
 function parseHoldBody(
   body: string | null,
+  maxSeats: number,
 ): { ok: true; seatIds: string[] } | { ok: false; message: string } {
   if (!body) {
     return { ok: false, message: "missing JSON body" };
@@ -97,10 +104,10 @@ function parseHoldBody(
   if (!Array.isArray(seatIds)) {
     return { ok: false, message: "seatIds must be an array" };
   }
-  if (seatIds.length < 1 || seatIds.length > MAX_HOLD_SEATS) {
+  if (seatIds.length < 1 || seatIds.length > maxSeats) {
     return {
       ok: false,
-      message: `seatIds length must be between 1 and ${MAX_HOLD_SEATS}`,
+      message: `seatIds length must be between 1 and ${maxSeats}`,
     };
   }
   for (let i = 0; i < seatIds.length; i++) {

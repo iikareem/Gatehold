@@ -12,21 +12,23 @@ import {
 import {
   buildCreateOrderTransactWriteInput,
   callerUserId,
+  DEFAULT_MAX_HOLD_SEATS,
   getDocClient,
   getSqsClient,
   idempotencyTtlEpoch,
+  maxHoldSeats,
   payUntilAt,
   requireEnv,
   type IdempotencyItem,
   type OrderQueueMessage,
 } from "../../shared/src";
 
-/** Max seats per order (same cap as holds). */
-export const MAX_ORDER_SEATS = 8;
+/** Default max seats (runtime cap from SSM via maxHoldSeats — same as holds). */
+export const MAX_ORDER_SEATS = DEFAULT_MAX_HOLD_SEATS;
 
 /**
- * Phase 4 — accept order: claim idempotency, lock seats PAYING, create PENDING,
- * enqueue SQS, return 202. Identity: Cognito JWT `sub` from authorizer (9b).
+ * Phase 4 / 9d.3 — accept order: claim idempotency, lock seats PAYING, create PENDING,
+ * enqueue SQS, return 202. Seat cap from SSM. Identity: Cognito JWT `sub` (9b).
  */
 export async function handler(
   event: APIGatewayProxyEvent,
@@ -47,7 +49,8 @@ export async function handler(
     return json(400, { message: "missing Idempotency-Key header" });
   }
 
-  const parsed = parseOrderBody(event.body);
+  const seatCap = await maxHoldSeats();
+  const parsed = parseOrderBody(event.body, seatCap);
   if (!parsed.ok) {
     return json(400, { message: parsed.message });
   }
@@ -184,8 +187,8 @@ async function markIdempotencyAccepted(
 
 function parseOrderBody(
   body: string | null,
+  maxSeats: number,
 ):
-
   | { ok: true; eventId: string; holdId: string; seatIds: string[] }
   | { ok: false; message: string } {
   if (!body) {
@@ -220,10 +223,10 @@ function parseOrderBody(
   if (!Array.isArray(seatIds)) {
     return { ok: false, message: "seatIds must be an array" };
   }
-  if (seatIds.length < 1 || seatIds.length > MAX_ORDER_SEATS) {
+  if (seatIds.length < 1 || seatIds.length > maxSeats) {
     return {
       ok: false,
-      message: `seatIds length must be between 1 and ${MAX_ORDER_SEATS}`,
+      message: `seatIds length must be between 1 and ${maxSeats}`,
     };
   }
   for (let i = 0; i < seatIds.length; i++) {

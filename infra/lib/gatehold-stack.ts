@@ -37,6 +37,8 @@ export class GateholdStack extends cdk.Stack {
       stage,
       seatsTable: data.seatsTable,
       eventsTableName: data.eventsTable.tableName,
+      holdTtlMsParam: config.holdTtlMsParam,
+      maxHoldSeatsParam: config.maxHoldSeatsParam,
     });
 
     const orders = new OrderAccept(this, "Orders", {
@@ -46,6 +48,7 @@ export class GateholdStack extends cdk.Stack {
       seatsTable: data.seatsTable,
       ordersTable: data.ordersTable,
       idempotencyTable: data.idempotencyTable,
+      maxHoldSeatsParam: config.maxHoldSeatsParam,
     });
 
     const purchase = new PurchaseSaga(this, "Purchase", {

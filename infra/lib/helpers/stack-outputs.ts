@@ -120,15 +120,15 @@ export function addGateholdOutputs(
   });
   new cdk.CfnOutput(stack, "HoldTtlMsParamName", {
     value: config.holdTtlMsParamName,
-    description: "SSM parameter for hold TTL ms (wired in 9d.3)",
+    description: "SSM parameter for hold TTL ms (hold-seat GetParameter)",
   });
   new cdk.CfnOutput(stack, "MaxHoldSeatsParamName", {
     value: config.maxHoldSeatsParamName,
-    description: "SSM parameter for max seats per hold/order (wired in 9d.3)",
+    description: "SSM parameter for max seats (hold-seat + create-order GetParameter)",
   });
   new cdk.CfnOutput(stack, "RefundRateParamName", {
     value: config.refundRateParamName,
-    description: "SSM parameter for refund rate (Phase 11)",
+    description: "SSM parameter for refund rate (Phase 11 stub — no consumer yet)",
   });
   new cdk.CfnOutput(stack, "StreamRelayFunctionName", {
     value: domainEvents.streamRelayFn.functionName,

@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import { Construct } from "constructs";
 import {
@@ -18,6 +19,10 @@ export interface HoldCapabilityProps {
   seatsTable: dynamodb.ITable;
   /** For Lambda env (`EVENTS_TABLE_NAME`); no Events grants here. */
   eventsTableName: string;
+  /** Hold TTL ms SSM param (Phase 9d.3). */
+  holdTtlMsParam: ssm.IStringParameter;
+  /** Max seats per hold SSM param (Phase 9d.3). */
+  maxHoldSeatsParam: ssm.IStringParameter;
 }
 
 /**
@@ -34,7 +39,13 @@ export class HoldCapability extends Construct {
   constructor(scope: Construct, id: string, props: HoldCapabilityProps) {
     super(scope, id);
 
-    const { stage, seatsTable, eventsTableName } = props;
+    const {
+      stage,
+      seatsTable,
+      eventsTableName,
+      holdTtlMsParam,
+      maxHoldSeatsParam,
+    } = props;
 
     const lambdaEnv = baseLambdaEnv(stage, {
       eventsTableName,
@@ -45,7 +56,11 @@ export class HoldCapability extends Construct {
       stage,
       name: "hold-seat",
       entry: path.join(projectRoot, "services/hold-seat/src/handler.ts"),
-      environment: lambdaEnv,
+      environment: {
+        ...lambdaEnv,
+        HOLD_TTL_MS_PARAM_NAME: holdTtlMsParam.parameterName,
+        MAX_HOLD_SEATS_PARAM_NAME: maxHoldSeatsParam.parameterName,
+      },
     });
 
     // Go custom runtime: zip built by `npm run build:hold-sweeper` (bootstrap).
@@ -59,6 +74,8 @@ export class HoldCapability extends Construct {
 
     seatsTable.grantReadWriteData(this.holdSeatFn);
     seatsTable.grantReadWriteData(this.holdSweeperFn);
+    holdTtlMsParam.grantRead(this.holdSeatFn);
+    maxHoldSeatsParam.grantRead(this.holdSeatFn);
 
     // Timer only (not the Phase 8 domain event bus).
     new scheduler.Schedule(this, "HoldSweeperSchedule", {

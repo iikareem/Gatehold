@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import { Construct } from "constructs";
 import {
   baseLambdaEnv,
@@ -17,6 +18,8 @@ export interface OrderAcceptProps {
   seatsTable: dynamodb.ITable;
   ordersTable: dynamodb.ITable;
   idempotencyTable: dynamodb.ITable;
+  /** Max seats per order SSM param (Phase 9d.3; same as holds). */
+  maxHoldSeatsParam: ssm.IStringParameter;
 }
 
 /**
@@ -41,6 +44,7 @@ export class OrderAccept extends Construct {
       seatsTable,
       ordersTable,
       idempotencyTable,
+      maxHoldSeatsParam,
     } = props;
 
     this.orderDlq = new sqs.Queue(this, "OrderDlq", {
@@ -75,6 +79,7 @@ export class OrderAccept extends Construct {
         ORDERS_TABLE_NAME: ordersTable.tableName,
         IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
         ORDER_QUEUE_URL: this.orderQueue.queueUrl,
+        MAX_HOLD_SEATS_PARAM_NAME: maxHoldSeatsParam.parameterName,
       },
     });
 
@@ -83,5 +88,6 @@ export class OrderAccept extends Construct {
     ordersTable.grantReadWriteData(this.createOrderFn);
     idempotencyTable.grantReadWriteData(this.createOrderFn);
     this.orderQueue.grantSendMessages(this.createOrderFn);
+    maxHoldSeatsParam.grantRead(this.createOrderFn);
   }
 }

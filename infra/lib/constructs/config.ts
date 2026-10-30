@@ -19,7 +19,8 @@ export interface ConfigProps {
  * Secrets Manager + SSM Parameter Store (Phase 9d).
  *
  * 9d.2 wires mock-payment secret into payment Lambdas.
- * 9d.3 wires SSM hold TTL / max seats (params exist from 9d.1).
+ * 9d.3 wires SSM hold TTL / max seats into hold-seat + create-order.
+ * refund-rate exists for Phase 11 (no consumer yet).
  */
 export class Config extends Construct {
   readonly mockPaymentSecret: secretsmanager.ISecret;

@@ -314,9 +314,9 @@ npm run seed
 
 ---
 
-## Phase 9a — Cognito login (get an IdToken)
+## Phase 9 — Cognito login (get an IdToken)
 
-Pool + client exist after deploy. Login returns a JWT for learning; **write routes do not require it until 9b** (still use `X-User-Id`).
+Pool + client exist after deploy. Holds, orders, and get-order require `Authorization: Bearer <IdToken>`; identity is JWT `sub`.
 
 | | |
 |---|---|
@@ -359,11 +359,13 @@ aws --endpoint-url "$AWS_ENDPOINT_URL" cognito-idp initiate-auth \
   --query 'AuthenticationResult.IdToken' --output text
 ```
 
-Save the printed string — that is the **IdToken** (JWT). In Phase 9b you will send it as:
+Save the printed string — that is the **IdToken** (JWT). Send it as:
 
 ```http
 Authorization: Bearer <IdToken>
 ```
+
+Admin routes (`/admin/*`) need an IdToken whose `cognito:groups` includes `admin`; fans get 403, admins get `501` stubs until Phase 11.
 
 ### Decode claims (optional)
 
@@ -374,15 +376,9 @@ python3 -c "import sys,base64,json; p=sys.argv[1].split('.')[1]; p+='='*((-len(p
 
 Expect at least: `sub`, `cognito:username`, `iss` (matches `UserPoolIssuer`). For `admin`, also `cognito:groups: ["admin"]`.
 
-### Until Phase 9b
-
-Hold/order curls still use `-H "X-User-Id: alice"`. A Bearer token is ignored by the API today.
-
 ## Not implemented yet
 
 Do not expect these to work:
 
 - `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
-- API Gateway JWT authorizer / identity from `sub` — Phase 9b
-- Admin cancel/refund routes — Phase 9c (`501` stubs) / Phase 11
-- Cognito-required writes — Phase 9b (`X-User-Id` stub still active)
+- Real cancel / refund behavior — Phase 11 (`501` stubs on admin routes for now)

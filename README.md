@@ -808,8 +808,8 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 8c: SNS → SQS
 - [x] Phase 8d: SES email consumer
 - [x] Phase 9a: Cognito pool + local users
-- [ ] Phase 9b: JWT authorizer + identity from claims
-- [ ] Phase 9c: Admin group + reserved admin routes
+- [x] Phase 9b: JWT authorizer + identity from claims
+- [x] Phase 9c: Admin group + reserved admin routes
 - [x] Phase 9d.1: Config construct + StackPort secrets/ssm
 - [x] Phase 9d.2: Secrets Manager → payment Lambdas
 - [x] Phase 9d.3: SSM hold TTL + seat cap

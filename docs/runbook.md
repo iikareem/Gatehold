@@ -385,7 +385,7 @@ echo '{"payload":{"ticketId":"tkt:smoke:A-1"},"signature":"pending"}' | \
 - [x] Outputs: `UserPoolId`, `UserPoolClientId`, `UserPoolIssuer`
 - [x] `npm run seed:auth` creates `alice` + `admin` (password `Gatehold1!`) and prints `sub` / groups
 - [x] IdToken for `admin` includes `cognito:groups: ["admin"]`
-- [x] Hold/order still work with `X-User-Id` (authorizer is Phase 9b)
+- [x] Phase 9b/9c: holds/orders require Bearer JWT (`sub`); `/admin/*` TOKEN authorizer (fan 403, admin 501)
 - [x] StackPort: use service id `cognito-idp` (not `cognito`) in `STACKPORT_SERVICES`
 
 ### Get a JWT (MiniStack)

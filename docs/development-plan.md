@@ -42,11 +42,9 @@ Related docs:
 
 ## Current baseline
 
-Phases 0–8 and most of 9–10 are implemented: holds, sweeper, group holds, orders + SQS, mock payment, purchase saga + ledger, CDK composites, domain events (stream → EventBridge → SNS/SES), Cognito pool + config/secrets/IAM hardening, and signed tickets (issue, get-order, verify).
+Phases 0–10 are implemented: holds, sweeper, group holds, orders + SQS, mock payment, purchase saga + ledger, CDK composites, domain events (stream → EventBridge → SNS/SES), Cognito JWT auth + admin stubs + config/secrets/IAM hardening, and signed tickets (issue, get-order, verify).
 
-**Still open in Phase 9:** 9b JWT authorizer (API still uses `X-User-Id`) and 9c admin route stubs.
-
-**Next:** Phase 9b — JWT authorizer + identity from claims.
+**Next:** Phase 11 — Event cancellation and mass refunds.
 
 ---
 
@@ -462,7 +460,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** no token → 401; fan JWT → hold/order owned by that `sub`; hold → order → saga still confirms
 
-**Status:** Not started.
+**Status:** Done — Cognito authorizer on holds/orders/get-order; `callerUserId` from JWT `sub`; `X-User-Id` stub removed.
 
 ### Slice 9c — Admin group + reserved admin routes
 
@@ -475,7 +473,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** fan JWT → 403; admin JWT → 501
 
-**Status:** Not started.
+**Status:** Done — TOKEN `admin-authorizer` (JWT + `admin` group) on `/admin/*`; stubs return 501.
 
 ### Slice 9d — Secrets + least-privilege IAM
 
@@ -795,8 +793,8 @@ Copy into a notebook or tick in place:
 - [x] Phase 8c — SNS → SQS
 - [x] Phase 8d — SES email consumer
 - [x] Phase 9a — Cognito pool + local users
-- [ ] Phase 9b — JWT authorizer + identity from claims
-- [ ] Phase 9c — Admin group + reserved admin routes
+- [x] Phase 9b — JWT authorizer + identity from claims
+- [x] Phase 9c — Admin group + reserved admin routes
 - [x] Phase 9d.1 — Config construct + StackPort secrets/ssm
 - [x] Phase 9d.2 — Secrets Manager → payment Lambdas
 - [x] Phase 9d.3 — SSM hold TTL + seat cap

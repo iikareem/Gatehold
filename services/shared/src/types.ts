@@ -90,7 +90,7 @@ export interface AuthorizedSagaState extends SagaInput {
 }
 
 /**
- * Saga state after IssueTicket stub — placeholder ids until Phase 10.
+ * Saga state after IssueTicket — ticketIds for signed S3 artifacts (Phase 10b).
  */
 export interface TicketedSagaState extends AuthorizedSagaState {
   ticketIds: string[];

@@ -573,7 +573,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 - Hold → order → saga `CONFIRMED`; each `ticketId` has S3 JSON with `payload` + `signature`
 - IssueTicket failure still refunds + releases seats
 
-**Status:** Not started.
+**Status:** Done — IssueTicket signs + puts S3 artifacts; CDK env/grants for bucket + `kms:Sign`.
 
 ### Slice 10c — GET order + presigned download URLs
 
@@ -798,7 +798,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 9d.3 — SSM hold TTL + seat cap
 - [x] Phase 9d.4 — Least-privilege IAM + permission map
 - [x] Phase 10a — Contracts + TicketStore (S3 + KMS) + shared helpers
-- [ ] Phase 10b — Real IssueTicket (sign + S3)
+- [x] Phase 10b — Real IssueTicket (sign + S3)
 - [ ] Phase 10c — GET order + presigned URLs
 - [ ] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds

@@ -544,15 +544,15 @@ No private or public key material in the object. Sign creates the signature; Ver
 
 Shared helpers: `buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`, `TICKET_SIGNING_ALGORITHM` in `services/shared/src/ticket.ts`.
 
-### IssueTicket (saga Task)
+### IssueTicket (saga Task — Phase 10b)
 
-**Phase 6–10a (current stub):** writes placeholder `ticketIds` on the order only (no KMS/S3 put yet).
+Env: `ORDERS_TABLE_NAME`, `TICKETS_BUCKET`, `TICKET_SIGNING_KEY_ID`.
 
-1. For each `seatId`, build deterministic id `tkt:{orderId}:{seatId}`.
+1. For each `seatId` in saga state: build payload (`tkt:{orderId}:{seatId}`), `KMS.Sign` over `ticketSigningMessage(payload)`, `PutObject` `{ payload, signature }` at `tickets/{ticketId}.json`.
 2. `SET ticketIds = if_not_exists(ticketIds, :ticketIds)` on the order (`attribute_exists(orderId)`).
 3. Return saga state plus `ticketIds`.
 
-**Phase 10b:** for each seat, build payload → `KMS.Sign` → `PutObject` artifact → then write `ticketIds` as above.
+Idempotent retries: deterministic S3 keys (overwrite ok); order write uses `if_not_exists`. Missing `seatIds` / order → `IssueTicketError`. KMS/S3/Dynamo throttle → `TransientError`.
 
 ASL: retry `TransientError` only. Do **not** retry `IssueTicketError`.
 

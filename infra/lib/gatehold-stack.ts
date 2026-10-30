@@ -52,6 +52,9 @@ export class GateholdStack extends cdk.Stack {
       maxHoldSeatsParam: config.maxHoldSeatsParam,
     });
 
+    // Phase 10a/b — bucket + signing key before PurchaseSaga (IssueTicket grants).
+    const tickets = new TicketStore(this, "Tickets", { stage, removalPolicy });
+
     const purchase = new PurchaseSaga(this, "Purchase", {
       stage,
       eventsTable: data.eventsTable,
@@ -61,6 +64,8 @@ export class GateholdStack extends cdk.Stack {
       orderQueue: orders.orderQueue,
       mockPaymentSecret: config.mockPaymentSecret,
       mockPaymentUrl: config.mockPaymentUrl,
+      ticketsBucket: tickets.ticketsBucket,
+      ticketSigningKey: tickets.signingKey,
     });
 
     const http = new HttpApi(this, "Http", {
@@ -79,9 +84,6 @@ export class GateholdStack extends cdk.Stack {
       removalPolicy,
       ordersTable: data.ordersTable,
     });
-
-    // Phase 10a — bucket + signing key only; IssueTicket grants wire in 10b.
-    const tickets = new TicketStore(this, "Tickets", { stage, removalPolicy });
 
     addGateholdOutputs(this, {
       data,

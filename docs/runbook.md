@@ -360,7 +360,7 @@ Lambda → actions → resources: see [iam-map.md](./iam-map.md).
 - [x] Outputs: `TicketsBucketName`, `TicketSigningKeyId`, `TicketSigningKeyArn`
 - [x] Contracts + `services/shared` ticket helpers (`buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`)
 - [x] StackPort: add `kms` to `STACKPORT_SERVICES` (recreate stackport if it was already up)
-- [ ] IssueTicket still stub until 10b (ids on order only)
+- [x] Phase 10b: IssueTicket signs + puts `tickets/{ticketId}.json`; env `TICKETS_BUCKET` / `TICKET_SIGNING_KEY_ID`
 
 ### Ticket store smoke (optional, after deploy)
 

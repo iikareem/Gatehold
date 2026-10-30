@@ -1,9 +1,13 @@
 import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import {
   buildIssueTicketsUpdateInput,
+  buildTicketPayload,
   getDocClient,
-  placeholderTicketIds,
+  putTicketArtifact,
   requireEnv,
+  signTicketMessage,
+  ticketObjectKey,
+  ticketSigningMessage,
 } from "../../shared/src";
 import type {
   AuthorizedSagaState,
@@ -11,7 +15,7 @@ import type {
 } from "../../shared/src/types";
 
 /**
- * Business failure — order missing or could not record placeholder tickets.
+ * Business failure — missing input, order missing, or non-retryable issue.
  */
 export class IssueTicketError extends Error {
   constructor(message: string) {
@@ -21,7 +25,7 @@ export class IssueTicketError extends Error {
 }
 
 /**
- * Transient DynamoDB failure — safe for Step Functions retry.
+ * Transient AWS failure — safe for Step Functions retry.
  */
 export class TransientError extends Error {
   constructor(message: string) {
@@ -31,22 +35,49 @@ export class TransientError extends Error {
 }
 
 /**
- * Phase 6 Slice 7 — IssueTicket (stub).
- * Writes deterministic placeholder ticketIds on the order (no KMS/S3 yet).
- * Phase 10 replaces this with signed artifacts in S3.
+ * Phase 10b — IssueTicket.
+ * For each seat: build payload → KMS.Sign → PutObject `{payload,signature}` →
+ * then write ticketIds on the order (idempotent if_not_exists).
  */
 export async function handler(
   event: AuthorizedSagaState,
 ): Promise<TicketedSagaState> {
   const ordersTable = requireEnv("ORDERS_TABLE_NAME");
+  const ticketsBucket = requireEnv("TICKETS_BUCKET");
+  const signingKeyId = requireEnv("TICKET_SIGNING_KEY_ID");
 
   if (!event.seatIds?.length) {
     throw new IssueTicketError("seatIds required");
   }
+  if (!event.eventId) {
+    throw new IssueTicketError("eventId required");
+  }
+  if (!event.userId) {
+    throw new IssueTicketError("userId required");
+  }
 
-  const ticketIds = placeholderTicketIds(event.orderId, event.seatIds);
+  const ticketIds: string[] = [];
 
   try {
+    for (const seatId of event.seatIds) {
+      const payload = buildTicketPayload({
+        orderId: event.orderId,
+        eventId: event.eventId,
+        seatId,
+        userId: event.userId,
+      });
+      const signature = await signTicketMessage(
+        signingKeyId,
+        ticketSigningMessage(payload),
+      );
+      await putTicketArtifact({
+        bucket: ticketsBucket,
+        key: ticketObjectKey(payload.ticketId),
+        artifact: { payload, signature },
+      });
+      ticketIds.push(payload.ticketId);
+    }
+
     await getDocClient().send(
       new UpdateCommand(
         buildIssueTicketsUpdateInput({
@@ -57,12 +88,15 @@ export async function handler(
       ),
     );
   } catch (err) {
+    if (err instanceof IssueTicketError || err instanceof TransientError) {
+      throw err;
+    }
     if (isConditionalCheckFailed(err)) {
       throw new IssueTicketError(
         `issue ticket failed for order ${event.orderId}: order not found`,
       );
     }
-    if (isTransientDynamoError(err)) {
+    if (isTransientAwsError(err)) {
       throw new TransientError(
         err instanceof Error ? err.message : String(err),
       );
@@ -70,9 +104,10 @@ export async function handler(
     throw err;
   }
 
-  console.info("issue-ticket ok (stub)", {
+  console.info("issue-ticket ok", {
     orderId: event.orderId,
     ticketIds,
+    bucket: ticketsBucket,
   });
 
   return {
@@ -86,7 +121,7 @@ function isConditionalCheckFailed(err: unknown): boolean {
   return (err as { name?: string }).name === "ConditionalCheckFailedException";
 }
 
-function isTransientDynamoError(err: unknown): boolean {
+function isTransientAwsError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const name = (err as { name?: string }).name;
   return (
@@ -94,6 +129,9 @@ function isTransientDynamoError(err: unknown): boolean {
     name === "ThrottlingException" ||
     name === "RequestLimitExceeded" ||
     name === "InternalServerError" ||
-    name === "ServiceUnavailable"
+    name === "ServiceUnavailable" ||
+    name === "SlowDown" ||
+    name === "TimeoutError" ||
+    name === "NetworkingError"
   );
 }

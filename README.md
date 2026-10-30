@@ -805,7 +805,8 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [ ] Phase 8: Streams relay, EventBridge, notifications
 - [ ] Phase 9: Cognito, least-privilege IAM, secrets
 - [x] Phase 10a: TicketStore (S3 + KMS) + contracts / helpers
-- [ ] Phase 10b–d: IssueTicket sign, get-order, verify
+- [x] Phase 10b: IssueTicket KMS sign + S3 artifacts
+- [ ] Phase 10c–d: get-order presign, verify helper
 - [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
 - [ ] Phase 12: Reconciler + independent auditor
 - [ ] Phase 13: Dashboards, alarms, tracing

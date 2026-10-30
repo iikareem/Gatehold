@@ -1,8 +1,10 @@
 import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as kms from "aws-cdk-lib/aws-kms";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
@@ -27,6 +29,9 @@ export interface PurchaseSagaProps {
   mockPaymentSecret: secretsmanager.ISecret;
   /** Seeded URL for stack outputs (value also lives in the secret). */
   mockPaymentUrl: string;
+  /** Phase 10b — signed ticket artifacts. */
+  ticketsBucket: s3.IBucket;
+  ticketSigningKey: kms.IKey;
 }
 
 /**
@@ -64,6 +69,8 @@ export class PurchaseSaga extends Construct {
       ledgerTable,
       orderQueue,
       mockPaymentSecret,
+      ticketsBucket,
+      ticketSigningKey,
     } = props;
 
     const lambdaEnv = baseLambdaEnv(stage, {
@@ -230,9 +237,12 @@ export class PurchaseSaga extends Construct {
       stage,
       name: "issue-ticket",
       entry: path.join(projectRoot, "services/saga-steps/src/issue-ticket.ts"),
+      timeout: cdk.Duration.seconds(30),
       environment: {
         ...lambdaEnv,
         ORDERS_TABLE_NAME: ordersTable.tableName,
+        TICKETS_BUCKET: ticketsBucket.bucketName,
+        TICKET_SIGNING_KEY_ID: ticketSigningKey.keyId,
       },
     });
 
@@ -368,6 +378,10 @@ export class PurchaseSaga extends Construct {
     ordersTable.grantWriteData(this.markConfirmedFn);
     ordersTable.grantWriteData(this.markFailedFn);
     ordersTable.grantWriteData(this.markRefundedFn);
+
+    // Phase 10b — sign + store ticket artifacts (private key never leaves KMS).
+    ticketsBucket.grantPut(this.issueTicketFn);
+    ticketSigningKey.grant(this.issueTicketFn, "kms:Sign");
 
     // Payment provider URL — only these four may read the secret (9d.2).
     mockPaymentSecret.grantRead(this.authorizePaymentFn);

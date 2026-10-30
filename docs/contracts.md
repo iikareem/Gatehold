@@ -497,6 +497,50 @@ After seats are `SOLD`, take the money:
 
 ASL: retry `TransientError` only. Do **not** retry `CapturePaymentError`.
 
+### GET /orders/{orderId} (Phase 10c)
+
+Poll order status for the authenticated owner. When `CONFIRMED`, mint short-lived S3 presigned `GetObject` URLs for each ticket artifact.
+
+**Auth:** Cognito JWT (same as `POST /orders`). Identity from `sub` — never trust a body `userId`.
+
+**Path:** `orderId` required. Missing → `400`.
+
+**Success — `200 OK`**
+
+```json
+{
+  "orderId": "ord_…",
+  "status": "CONFIRMED",
+  "eventId": "evt_001",
+  "holdId": "h_…",
+  "seatIds": ["A-12-07"],
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "amount": 5000,
+  "ticketIds": ["tkt:ord_…:A-12-07"],
+  "tickets": [
+    {
+      "ticketId": "tkt:ord_…:A-12-07",
+      "downloadUrl": "https://…presigned…",
+      "expiresInSeconds": 900
+    }
+  ]
+}
+```
+
+- `tickets` is present **only** when `status === CONFIRMED` and `ticketIds` is non-empty.
+- Presign TTL default: **900 seconds** (`DEFAULT_TICKET_DOWNLOAD_TTL_SECONDS`). Bucket stays private (`BlockPublicAccess`).
+- Non-confirmed statuses still return order fields (for client polling) without `tickets`.
+
+**Errors**
+
+| Status | When |
+|---|---|
+| `401` | Missing / invalid Cognito authorizer claims |
+| `400` | Missing `orderId` path parameter |
+| `404` | Unknown `orderId` **or** caller is not the order owner (same message — no existence leak) |
+
+Env: `ORDERS_TABLE_NAME`, `TICKETS_BUCKET`. IAM: DynamoDB read orders · S3 `GetObject` (presign) on tickets bucket.
+
 ### Signed ticket artifact (Phase 10a+)
 
 Orders keep `ticketIds` only. Each id points at a private S3 object.

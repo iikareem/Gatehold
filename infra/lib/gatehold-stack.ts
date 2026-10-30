@@ -42,6 +42,9 @@ export class GateholdStack extends cdk.Stack {
       maxHoldSeatsParam: config.maxHoldSeatsParam,
     });
 
+    // Phase 10a/b/c — bucket + signing key before Orders (get-order) + PurchaseSaga.
+    const tickets = new TicketStore(this, "Tickets", { stage, removalPolicy });
+
     const orders = new OrderAccept(this, "Orders", {
       stage,
       removalPolicy,
@@ -50,10 +53,8 @@ export class GateholdStack extends cdk.Stack {
       ordersTable: data.ordersTable,
       idempotencyTable: data.idempotencyTable,
       maxHoldSeatsParam: config.maxHoldSeatsParam,
+      ticketsBucket: tickets.ticketsBucket,
     });
-
-    // Phase 10a/b — bucket + signing key before PurchaseSaga (IssueTicket grants).
-    const tickets = new TicketStore(this, "Tickets", { stage, removalPolicy });
 
     const purchase = new PurchaseSaga(this, "Purchase", {
       stage,
@@ -74,6 +75,7 @@ export class GateholdStack extends cdk.Stack {
       seatsTable: data.seatsTable,
       holdSeatFn: holds.holdSeatFn,
       createOrderFn: orders.createOrderFn,
+      getOrderFn: orders.getOrderFn,
       userPool: auth.userPool,
       userPoolClient: auth.userPoolClient,
       userPoolIssuer: auth.issuerUrl,

@@ -19,6 +19,8 @@ export interface HttpApiProps {
   seatsTable: dynamodb.ITable;
   holdSeatFn: lambda.IFunction;
   createOrderFn: lambda.IFunction;
+  /** Phase 10c — GET /orders/{orderId} (owner + ticket presign). */
+  getOrderFn: lambda.IFunction;
   /** Cognito pool used by the REST Cognito authorizer (Phase 9b). */
   userPool: cognito.IUserPool;
   /** App client id — IdToken `aud` checked by the admin authorizer (9c). */
@@ -52,6 +54,7 @@ export class HttpApi extends Construct {
       seatsTable,
       holdSeatFn,
       createOrderFn,
+      getOrderFn,
       userPool,
       userPoolClient,
       userPoolIssuer,
@@ -169,11 +172,17 @@ export class HttpApi extends Construct {
       signedInMethodOptions,
     );
 
-    // POST /orders → create-order Lambda (Cognito JWT required)
+    // POST /orders → create-order; GET /orders/{orderId} → get-order (Cognito)
     const orders = this.api.root.addResource("orders");
     orders.addMethod(
       "POST",
       new apigateway.LambdaIntegration(createOrderFn),
+      signedInMethodOptions,
+    );
+    const orderById = orders.addResource("{orderId}");
+    orderById.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getOrderFn),
       signedInMethodOptions,
     );
 

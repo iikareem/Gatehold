@@ -740,6 +740,108 @@
               "body": "{\n  \"message\": \"order not acceptable\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"]\n}"
             }
           ]
+        },
+        {
+          "name": "Get order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  pm.test('has status', () => pm.expect(j.status).to.be.a('string'));",
+                  "  if (j.status === 'CONFIRMED' && Array.isArray(j.tickets) && j.tickets.length) {",
+                  "    pm.environment.set('ticketDownloadUrl', j.tickets[0].downloadUrl);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{idToken}}"
+              }
+            ],
+            "url": "{{gatewayBase}}/orders/{{orderId}}",
+            "description": "Phase 10c — poll order by orderId (owner JWT). When CONFIRMED, response includes tickets[].downloadUrl (presigned S3, ~15 min). Non-owner / missing → 404."
+          },
+          "response": [
+            {
+              "name": "200 CONFIRMED with tickets",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{idToken}}"
+                  }
+                ],
+                "url": "{{gatewayBase}}/orders/{{orderId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"CONFIRMED\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"],\n  \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n  \"ticketIds\": [\"tkt:ord_\u2026:A-12-07\"],\n  \"tickets\": [\n    {\n      \"ticketId\": \"tkt:ord_\u2026:A-12-07\",\n      \"downloadUrl\": \"https://\u2026presigned\u2026\",\n      \"expiresInSeconds\": 900\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 PENDING",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{idToken}}"
+                  }
+                ],
+                "url": "{{gatewayBase}}/orders/{{orderId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"orderId\": \"ord_\u2026\",\n  \"status\": \"PENDING\",\n  \"eventId\": \"evt_001\",\n  \"holdId\": \"h_\u2026\",\n  \"seatIds\": [\"A-12-07\"],\n  \"createdAt\": \"2026-01-01T00:00:00.000Z\"\n}"
+            },
+            {
+              "name": "404 not found or not owner",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminIdToken}}"
+                  }
+                ],
+                "url": "{{gatewayBase}}/orders/{{orderId}}"
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"order not found\"\n}"
+            }
+          ]
         }
       ]
     },

@@ -1,5 +1,9 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { TicketArtifact } from "./ticket";
+
+/** Default TTL for GET /orders/{orderId} ticket download links (Phase 10c). */
+export const DEFAULT_TICKET_DOWNLOAD_TTL_SECONDS = 900;
 
 /**
  * S3 client that honors AWS_ENDPOINT_URL (MiniStack / local emulator).
@@ -50,5 +54,29 @@ export async function putTicketArtifact(
       Body: JSON.stringify(params.artifact),
       ContentType: "application/json",
     }),
+  );
+}
+
+/**
+ * Short-lived HTTPS URL for GetObject on a private ticket artifact.
+ * Caller must already have authorized the download (order owner + CONFIRMED).
+ */
+export async function presignTicketGetUrl(
+  params: {
+    bucket: string;
+    key: string;
+    expiresInSeconds?: number;
+  },
+  client: S3Client = getS3Client(),
+): Promise<string> {
+  const expiresIn =
+    params.expiresInSeconds ?? DEFAULT_TICKET_DOWNLOAD_TTL_SECONDS;
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: params.bucket,
+      Key: params.key,
+    }),
+    { expiresIn },
   );
 }

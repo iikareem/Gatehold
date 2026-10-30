@@ -61,6 +61,9 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "CreateOrderFunctionName", {
     value: orders.createOrderFn.functionName,
   });
+  new cdk.CfnOutput(stack, "GetOrderFunctionName", {
+    value: orders.getOrderFn.functionName,
+  });
   new cdk.CfnOutput(stack, "OrdersTableName", {
     value: data.ordersTable.tableName,
   });

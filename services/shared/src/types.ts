@@ -49,7 +49,7 @@ export interface OrderItem {
   amount?: number;
   executionArn?: string;
   failReason?: string;
-  /** Placeholder ticket ids until Phase 10 KMS/S3 issuance. */
+  /** Ticket ids pointing at S3 artifacts (`tickets/{ticketId}.json`). */
   ticketIds?: string[];
 }
 

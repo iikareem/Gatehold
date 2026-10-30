@@ -588,7 +588,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 - After confirm: GET returns working URLs; other user → 403/404 as contracted
 
-**Status:** Not started.
+**Status:** Done — `get-order` Lambda + `GET /orders/{orderId}`; owner 404; presigned URLs when `CONFIRMED`.
 
 ### Slice 10d — Verification helper
 
@@ -799,7 +799,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 9d.4 — Least-privilege IAM + permission map
 - [x] Phase 10a — Contracts + TicketStore (S3 + KMS) + shared helpers
 - [x] Phase 10b — Real IssueTicket (sign + S3)
-- [ ] Phase 10c — GET order + presigned URLs
+- [x] Phase 10c — GET order + presigned URLs
 - [ ] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds
 - [ ] Phase 12 — Reconciler and auditor

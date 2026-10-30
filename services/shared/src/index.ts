@@ -32,7 +32,13 @@ export { createDynamoDBClient, getDocClient } from "./dynamodb";
 export { createSqsClient, getSqsClient } from "./sqs";
 export { createSfnClient, getSfnClient } from "./sfn";
 export { createKmsClient, getKmsClient, signTicketMessage } from "./kms";
-export { createS3Client, getS3Client, putTicketArtifact } from "./s3";
+export {
+  createS3Client,
+  getS3Client,
+  putTicketArtifact,
+  presignTicketGetUrl,
+  DEFAULT_TICKET_DOWNLOAD_TTL_SECONDS,
+} from "./s3";
 export { createCognitoIdpClient } from "./cognito";
 export {
   createSecretsManagerClient,

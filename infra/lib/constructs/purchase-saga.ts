@@ -7,6 +7,7 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
 import { Construct } from "constructs";
+import { grantTableWriteWithTransact } from "../helpers/iam-grants";
 import {
   baseLambdaEnv,
   createNodeFn,
@@ -344,27 +345,29 @@ export class PurchaseSaga extends Construct {
       }),
     );
 
-    ordersTable.grantReadWriteData(this.sagaStarterFn);
+    // saga-starter: UpdateItem executionArn only (no table reads).
+    ordersTable.grantWriteData(this.sagaStarterFn);
     this.purchaseSaga.grantStartExecution(this.sagaStarterFn);
 
     eventsTable.grantReadData(this.verifyHoldFn);
     seatsTable.grantReadData(this.verifyHoldFn);
     ordersTable.grantReadData(this.verifyHoldFn);
 
-    ledgerTable.grantReadWriteData(this.authorizePaymentFn);
-    ordersTable.grantReadWriteData(this.authorizePaymentFn);
+    // authorize: ledger Put + orders Update. capture/void/refund: ledger Put only.
+    ledgerTable.grantWriteData(this.authorizePaymentFn);
+    ordersTable.grantWriteData(this.authorizePaymentFn);
 
-    seatsTable.grantReadWriteData(this.confirmSeatFn);
-    seatsTable.grantReadWriteData(this.releaseSeatFn);
+    grantTableWriteWithTransact(seatsTable, this.confirmSeatFn);
+    grantTableWriteWithTransact(seatsTable, this.releaseSeatFn);
 
-    ledgerTable.grantReadWriteData(this.capturePaymentFn);
-    ledgerTable.grantReadWriteData(this.voidAuthorizationFn);
-    ledgerTable.grantReadWriteData(this.refundPaymentFn);
+    ledgerTable.grantWriteData(this.capturePaymentFn);
+    ledgerTable.grantWriteData(this.voidAuthorizationFn);
+    ledgerTable.grantWriteData(this.refundPaymentFn);
 
-    ordersTable.grantReadWriteData(this.issueTicketFn);
-    ordersTable.grantReadWriteData(this.markConfirmedFn);
-    ordersTable.grantReadWriteData(this.markFailedFn);
-    ordersTable.grantReadWriteData(this.markRefundedFn);
+    ordersTable.grantWriteData(this.issueTicketFn);
+    ordersTable.grantWriteData(this.markConfirmedFn);
+    ordersTable.grantWriteData(this.markFailedFn);
+    ordersTable.grantWriteData(this.markRefundedFn);
 
     // Payment provider URL — only these four may read the secret (9d.2).
     mockPaymentSecret.grantRead(this.authorizePaymentFn);

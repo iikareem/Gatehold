@@ -6,6 +6,7 @@ import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import { Construct } from "constructs";
+import { grantTableWriteWithTransact } from "../helpers/iam-grants";
 import {
   baseLambdaEnv,
   createGoFn,
@@ -72,7 +73,8 @@ export class HoldCapability extends Construct {
       environment: lambdaEnv,
     });
 
-    seatsTable.grantReadWriteData(this.holdSeatFn);
+    // hold-seat: TransactWrite only. sweeper: Scan + Update → needs read+write.
+    grantTableWriteWithTransact(seatsTable, this.holdSeatFn);
     seatsTable.grantReadWriteData(this.holdSweeperFn);
     holdTtlMsParam.grantRead(this.holdSeatFn);
     maxHoldSeatsParam.grantRead(this.holdSeatFn);

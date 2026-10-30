@@ -5,6 +5,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import { Construct } from "constructs";
+import { grantTableWriteWithTransact } from "../helpers/iam-grants";
 import {
   baseLambdaEnv,
   createNodeFn,
@@ -83,9 +84,11 @@ export class OrderAccept extends Construct {
       },
     });
 
+    // events: ConditionCheck (read). seats/orders: Transact Put/Update (write).
+    // idempotency: Put + Get + Update on conflict path (read+write).
     eventsTable.grantReadData(this.createOrderFn);
-    seatsTable.grantReadWriteData(this.createOrderFn);
-    ordersTable.grantReadWriteData(this.createOrderFn);
+    grantTableWriteWithTransact(seatsTable, this.createOrderFn);
+    grantTableWriteWithTransact(ordersTable, this.createOrderFn);
     idempotencyTable.grantReadWriteData(this.createOrderFn);
     this.orderQueue.grantSendMessages(this.createOrderFn);
     maxHoldSeatsParam.grantRead(this.createOrderFn);

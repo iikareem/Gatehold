@@ -17,6 +17,10 @@ import {
   projectRoot,
 } from "../helpers/node-fn";
 
+/** SES From address (must match notify-email env). */
+const SES_FROM_EMAIL = "noreply@gatehold.local";
+
+
 /** EventBridge source for order domain events (contracts.md). */
 export const ORDERS_EVENT_SOURCE = "gatehold.orders";
 
@@ -134,7 +138,7 @@ export class DomainEvents extends Construct {
       timeout: cdk.Duration.seconds(30),
       environment: {
         STAGE: stage,
-        SES_FROM_EMAIL: "noreply@gatehold.local",
+        SES_FROM_EMAIL,
         ...(process.env.AWS_ENDPOINT_URL
           ? {
               AWS_ENDPOINT_URL: dockerReachableEndpoint(
@@ -145,14 +149,21 @@ export class DomainEvents extends Construct {
       },
     });
 
+    // Phase 9d.4 — Send only as the From identity; Verify stays * (dynamic To + From).
+    const sesFromIdentityArn = cdk.Stack.of(this).formatArn({
+      service: "ses",
+      resource: "identity",
+      resourceName: SES_FROM_EMAIL,
+    });
     this.notifyEmailFn.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: [
-          "ses:SendEmail",
-          "ses:SendRawEmail",
-          // MiniStack / SES sandbox require verified From+To identities.
-          "ses:VerifyEmailIdentity",
-        ],
+        actions: ["ses:SendEmail", "ses:SendRawEmail"],
+        resources: [sesFromIdentityArn],
+      }),
+    );
+    this.notifyEmailFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ses:VerifyEmailIdentity"],
         resources: ["*"],
       }),
     );

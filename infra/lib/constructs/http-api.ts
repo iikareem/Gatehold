@@ -69,7 +69,7 @@ export class HttpApi extends Construct {
       environment: lambdaEnv,
     });
 
-    eventsTable.grantReadData(this.healthFn);
+    // health only GetItem on seats (?eventId=&seatId=); events table unused.
     seatsTable.grantReadData(this.healthFn);
 
     this.adminAuthorizerFn = createNodeFn(this, "AdminAuthorizerFn", {

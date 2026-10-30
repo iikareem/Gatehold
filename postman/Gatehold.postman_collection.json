@@ -754,6 +754,7 @@
                   "  pm.test('has status', () => pm.expect(j.status).to.be.a('string'));",
                   "  if (j.status === 'CONFIRMED' && Array.isArray(j.tickets) && j.tickets.length) {",
                   "    pm.environment.set('ticketDownloadUrl', j.tickets[0].downloadUrl);",
+                  "    if (j.tickets[0].ticketId) pm.environment.set('ticketId', j.tickets[0].ticketId);",
                   "  }",
                   "}"
                 ]

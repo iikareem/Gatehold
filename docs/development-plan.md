@@ -42,9 +42,11 @@ Related docs:
 
 ## Current baseline
 
-Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock payment wiring, purchase saga (happy path + compensation) + ledger, and CDK composite constructs under `infra/lib/constructs/` with a thin `GateholdStack` composer.
+Phases 0–8 and most of 9–10 are implemented: holds, sweeper, group holds, orders + SQS, mock payment, purchase saga + ledger, CDK composites, domain events (stream → EventBridge → SNS/SES), Cognito pool + config/secrets/IAM hardening, and signed tickets (issue, get-order, verify).
 
-**Next:** Phase 9b — JWT authorizer + identity from claims (Phase 9a Cognito pool done).
+**Still open in Phase 9:** 9b JWT authorizer (API still uses `X-User-Id`) and 9c admin route stubs.
+
+**Next:** Phase 9b — JWT authorizer + identity from claims.
 
 ---
 
@@ -239,6 +241,8 @@ Phases 0–7 are implemented: holds, sweeper, group holds, orders + SQS, mock pa
 - Timeout + status query returns a deterministic outcome for a given key
 
 **Why before the saga:** the saga’s hardest bugs are payment ambiguity; build the fake first.
+
+**Status:** Done — `go/mock-payment` authorize/capture/void/refund/status + chaos; compose service on `:8090`.
 
 ---
 
@@ -783,7 +787,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 2b — EventBridge Scheduler → sweeper Lambda
 - [x] Phase 3 — Group holds (explicit `seatIds` + `TransactWriteItems`)
 - [x] Phase 4 — Orders, idempotency, SQS
-- [ ] Phase 5 — Mock payment provider
+- [x] Phase 5 — Mock payment provider
 - [x] Phase 6 — Purchase saga
 - [x] Phase 7 — CDK composite constructs (infra refactor)
 - [x] Phase 8a — Orders stream + stream-relay (log)

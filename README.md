@@ -800,11 +800,20 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 2b: EventBridge Scheduler → sweeper Lambda
 - [x] Phase 3: Group holds (`seatIds` 1..8 + `TransactWriteItems`; block search deferred)
 - [x] Phase 4: Orders, idempotency, SQS (+ DLQ; no consumer yet)
-- [ ] Phase 5: Mock payment provider (Go)
+- [x] Phase 5: Mock payment provider (Go)
 - [x] Phase 6: Step Functions saga, ledger, `PAYING` / compensation
 - [x] Phase 7: CDK composite constructs (thin `GateholdStack` + domain constructs)
-- [ ] Phase 8: Streams relay, EventBridge, notifications
-- [ ] Phase 9: Cognito, least-privilege IAM, secrets
+- [x] Phase 8a: Orders stream + stream-relay (log)
+- [x] Phase 8b: EventBridge bus + OrderConfirmed
+- [x] Phase 8c: SNS → SQS
+- [x] Phase 8d: SES email consumer
+- [x] Phase 9a: Cognito pool + local users
+- [ ] Phase 9b: JWT authorizer + identity from claims
+- [ ] Phase 9c: Admin group + reserved admin routes
+- [x] Phase 9d.1: Config construct + StackPort secrets/ssm
+- [x] Phase 9d.2: Secrets Manager → payment Lambdas
+- [x] Phase 9d.3: SSM hold TTL + seat cap
+- [x] Phase 9d.4: Least-privilege IAM + permission map
 - [x] Phase 10a: TicketStore (S3 + KMS) + contracts / helpers
 - [x] Phase 10b: IssueTicket KMS sign + S3 artifacts
 - [x] Phase 10c: GET /orders/{orderId} + presigned ticket URLs

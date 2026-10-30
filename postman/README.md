@@ -16,7 +16,7 @@
 | **Health** | Liveness, Get seat | Smoke / inspect seat (`AVAILABLE` → `HELD` → `PAYING` → `SOLD`) |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept / Get order | `POST /orders` → `PENDING`; `GET /orders/{orderId}` → status + ticket URLs when `CONFIRMED` |
-| **Tickets** | Verify ticket | `POST /tickets/verify` with `{ payload, signature }` (no JWT) |
+| **Tickets** | Download artifact / Verify | Presigned S3 GET → `POST /tickets/verify` `{ payload, signature }` (no JWT) |
 | **Admin** | Cancel / List refunds | Fan JWT → 403; admin JWT → 501 stubs (Phase 9c) |
 | **Saga logs** | Filter verify-hold logs | MiniStack CloudWatch for VerifyHold |
 | **Domain events** | stream-relay + logger + SES messages, Get order | Phase 8 observe after confirm |
@@ -44,7 +44,7 @@ Prereq: `npm run ministack:up` (MiniStack + StackPort + mock-payment) then deplo
 2. **Orders → Accept order** (uses that hold; sets `orderId`; saga runs)  
 3. **Health → Get seat** — expect `PAYING`, then shortly `SOLD`  
 4. **Orders → Get order** — poll until `CONFIRMED`; then `tickets[].downloadUrl`  
-5. **Tickets → Verify ticket** — paste artifact JSON → `valid: true`  
+5. **Tickets → Download ticket artifact** then **Verify ticket** → `valid: true`  
 6. Optional: **Domain events → Get order (DynamoDB)** — raw table inspect  
 7. **Domain events → Filter stream-relay logs** — `OrderConfirmed published`  
 8. **Domain events → Filter OrderConfirmed logger logs** — bus → logger Lambda artifact  

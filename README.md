@@ -804,7 +804,8 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 7: CDK composite constructs (thin `GateholdStack` + domain constructs)
 - [ ] Phase 8: Streams relay, EventBridge, notifications
 - [ ] Phase 9: Cognito, least-privilege IAM, secrets
-- [ ] Phase 10: Signed tickets (KMS + S3)
+- [x] Phase 10a: TicketStore (S3 + KMS) + contracts / helpers
+- [ ] Phase 10b–d: IssueTicket sign, get-order, verify
 - [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
 - [ ] Phase 12: Reconciler + independent auditor
 - [ ] Phase 13: Dashboards, alarms, tracing

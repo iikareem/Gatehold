@@ -2,8 +2,14 @@
 
 Least-privilege snapshot after the 9d.4 audit. Grants live at construct edges
 (`hold-capability`, `order-accept`, `purchase-saga`, `http-api`, `domain-events`,
-`config`). Prefer CDK `grant*` helpers; add explicit statements only when the
-helper is too wide or missing an action the call graph needs.
+`config`, `ticket-store`). Prefer CDK `grant*` helpers; add explicit statements
+only when the helper is too wide or missing an action the call graph needs.
+
+**Phase 10a:** `TicketStore` provisions the tickets bucket + signing key but does
+**not** grant Lambdas yet. Expected later:
+- **issue-ticket (10b):** S3 `PutObject` tickets · KMS `Sign` (+ `kms:GetPublicKey` only if needed)
+- **get-order (10c):** DynamoDB **R** orders · S3 presign / `GetObject` tickets
+- **verify-ticket (10d):** KMS `Verify` · DynamoDB **R** events
 
 **Legend:** R = read · W = write (+ `TransactWriteItems` where noted) · RW = read+write
 

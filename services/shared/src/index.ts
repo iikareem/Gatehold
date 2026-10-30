@@ -86,6 +86,15 @@ export {
   type AppendLedgerParams,
 } from "./ledger";
 export {
+  TICKET_SIGNING_ALGORITHM,
+  buildTicketPayload,
+  ticketObjectKey,
+  ticketSigningMessage,
+  type TicketPayload,
+  type TicketArtifact,
+  type BuildTicketPayloadParams,
+} from "./ticket";
+export {
   authorizeWithProvider,
   captureWithProvider,
   voidWithProvider,

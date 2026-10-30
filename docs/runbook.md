@@ -354,6 +354,29 @@ curl -sS http://localhost:4566/_ministack/ses/messages | jq .
 
 Lambda → actions → resources: see [iam-map.md](./iam-map.md).
 
+## Phase 10a checklist
+
+- [x] `TicketStore` — private bucket `gatehold-{stage}-tickets` + KMS `SIGN_VERIFY` (`RSA_2048`)
+- [x] Outputs: `TicketsBucketName`, `TicketSigningKeyId`, `TicketSigningKeyArn`
+- [x] Contracts + `services/shared` ticket helpers (`buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`)
+- [x] StackPort: add `kms` to `STACKPORT_SERVICES` (recreate stackport if it was already up)
+- [ ] IssueTicket still stub until 10b (ids on order only)
+
+### Ticket store smoke (optional, after deploy)
+
+```bash
+set -a && source .env.example && set +a
+KEY=$(node -e "console.log(require('./.cdk-outputs.json')['Gatehold-dev'].TicketSigningKeyId)")
+BUCKET=$(node -e "console.log(require('./.cdk-outputs.json')['Gatehold-dev'].TicketsBucketName)")
+MSG=$(printf '%s' '{"ticketId":"tkt:smoke:A-1","orderId":"ord_smoke","eventId":"evt_001","seatId":"A-1","userId":"alice"}' | base64)
+aws --endpoint-url "$AWS_ENDPOINT_URL" kms sign \
+  --key-id "$KEY" --message "$MSG" --message-type RAW \
+  --signing-algorithm RSASSA_PSS_SHA_256 --output json > /tmp/gatehold-sign.json
+# verify with Signature from that file + same message; put dummy object:
+echo '{"payload":{"ticketId":"tkt:smoke:A-1"},"signature":"pending"}' | \
+  aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp - "s3://$BUCKET/tickets/tkt:smoke:A-1.json"
+```
+
 ## Phase 9a checklist
 
 - [x] `Auth` construct — UserPool `gatehold-{stage}`, app client (password auth), group `admin`

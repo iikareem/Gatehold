@@ -136,7 +136,10 @@ export function paymentRefundKey(orderId: string): string {
   return `pay:refund:${orderId}`;
 }
 
-/** Deterministic placeholder ticket id (Phase 6 stub; Phase 10 replaces with signed artifacts). */
+/**
+ * Deterministic ticket id `tkt:{orderId}:{seatId}`.
+ * Phase 6 wrote ids only; Phase 10 signs a payload and stores the artifact in S3 under this id.
+ */
 export function placeholderTicketId(orderId: string, seatId: string): string {
   return `tkt:${orderId}:${seatId}`;
 }

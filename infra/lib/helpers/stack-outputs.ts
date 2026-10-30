@@ -7,6 +7,7 @@ import type { HoldCapability } from "../constructs/hold-capability";
 import type { HttpApi } from "../constructs/http-api";
 import type { OrderAccept } from "../constructs/order-accept";
 import type { PurchaseSaga } from "../constructs/purchase-saga";
+import type { TicketStore } from "../constructs/ticket-store";
 
 /**
  * Stack-level CfnOutputs with stable IDs (ApiUrl, SeatsTableName, …)
@@ -23,10 +24,20 @@ export function addGateholdOutputs(
     purchase: PurchaseSaga;
     http: HttpApi;
     domainEvents: DomainEvents;
+    tickets: TicketStore;
   },
 ): void {
-  const { data, config, auth, holds, orders, purchase, http, domainEvents } =
-    parts;
+  const {
+    data,
+    config,
+    auth,
+    holds,
+    orders,
+    purchase,
+    http,
+    domainEvents,
+    tickets,
+  } = parts;
 
   new cdk.CfnOutput(stack, "ApiUrl", {
     value: http.api.url,
@@ -162,5 +173,17 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "UserPoolIssuer", {
     value: auth.issuerUrl,
     description: "JWT iss claim / OIDC issuer URL",
+  });
+  new cdk.CfnOutput(stack, "TicketsBucketName", {
+    value: tickets.ticketsBucket.bucketName,
+    description: "S3 bucket for signed ticket artifacts (Phase 10a)",
+  });
+  new cdk.CfnOutput(stack, "TicketSigningKeyId", {
+    value: tickets.signingKey.keyId,
+    description: "KMS key id for ticket Sign/Verify (Phase 10a)",
+  });
+  new cdk.CfnOutput(stack, "TicketSigningKeyArn", {
+    value: tickets.signingKey.keyArn,
+    description: "KMS key ARN for ticket Sign/Verify (Phase 10a)",
   });
 }

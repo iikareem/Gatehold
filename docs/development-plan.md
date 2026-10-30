@@ -522,26 +522,89 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 ---
 
-## Phase 10 — Signed tickets
+## Phase 10 — Signed tickets (sliced)
 
-**Goal:** Confirmed orders produce verifiable tickets.
+**Goal:** Confirmed orders produce verifiable tickets (KMS digital signature + S3 artifact + verify helper).
 
-**Build**
+**Crypto:** AWS KMS asymmetric `SIGN_VERIFY` (`RSA_2048`, `RSASSA_PSS_SHA_256`). Sign/Verify APIs — not encrypt/decrypt. MiniStack: include `kms` in `STACKPORT_SERVICES`.
 
-- KMS sign (or emulator-appropriate approach); S3 object per ticket
-- Presigned download URL on confirm / get-order
-- Verification helper: signature valid **and** event not `CANCELLED`
-- Wire real IssueTicket into the saga (replace Phase 6 stub)
-
-**Learn**
+**Learn (whole Phase 10)**
 
 - Tamper-evident artifacts vs authorization (cancelled event still rejects)
 
-**Done when**
+**Done when (whole Phase 10)**
 
 - Confirmed order → ticket bytes in S3
 - Tampered payload fails verification
 - Cancelled event fails verification even with a valid signature (can fully prove after Phase 11)
+
+### Slice 10a — Contracts + ticket store infra
+
+**Goal:** Define the ticket artifact and provision S3 + KMS with no saga behavior change yet.
+
+**Build**
+
+- Contracts: payload fields, S3 key `tickets/{ticketId}.json`, `{ payload, signature }`, signing algorithm, verify rules
+- `TicketStore` construct: private tickets bucket + KMS `SIGN_VERIFY` key; stack outputs
+- Shared helpers: `buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`
+- Add `kms` to MiniStack `STACKPORT_SERVICES`
+
+**Verify**
+
+- `cdk synth` / MiniStack deploy: `TicketsBucketName`, `TicketSigningKeyId` / `TicketSigningKeyArn` present
+- Optional smoke: `aws kms sign` / `verify` round-trip against the key; put a dummy object under `tickets/`
+
+**Do not:** change IssueTicket handler or saga ASL (that is 10b).
+
+**Status:** Done — contracts + `TicketStore` + shared ticket helpers + StackPort `kms`.
+
+### Slice 10b — Real IssueTicket (sign + S3 + order ids)
+
+**Goal:** Saga IssueTicket produces durable signed tickets; compensation path unchanged.
+
+**Build**
+
+- Replace IssueTicket stub: payload → `KMS.Sign` → `S3.PutObject` → write `ticketIds` (`if_not_exists`)
+- Idempotent deterministic keys; env/grants on purchase-saga (`TICKETS_BUCKET`, `TICKET_SIGNING_KEY_ID`)
+- Unit tests with mocked KMS/S3
+
+**Verify**
+
+- Hold → order → saga `CONFIRMED`; each `ticketId` has S3 JSON with `payload` + `signature`
+- IssueTicket failure still refunds + releases seats
+
+**Status:** Not started.
+
+### Slice 10c — GET order + presigned download URLs
+
+**Goal:** Fan can poll order status and fetch short-lived ticket download links.
+
+**Build**
+
+- `get-order` Lambda + `GET /orders/{orderId}` (owner check); presigned `GetObject` when `CONFIRMED`
+- Document API + IAM
+
+**Verify**
+
+- After confirm: GET returns working URLs; other user → 403/404 as contracted
+
+**Status:** Not started.
+
+### Slice 10d — Verification helper
+
+**Goal:** Prove tamper-evidence and cancelled-event reject.
+
+**Build**
+
+- Verify: `KMS.Verify` then event status ≠ `CANCELLED`
+- Thin `POST /tickets/verify` (simulated gate) for Postman/demos
+- Tests: valid / tampered / cancelled event
+
+**Verify**
+
+- Download via 10c → accept; mutate payload → reject; force event `CANCELLED` → reject
+
+**Status:** Not started.
 
 ---
 
@@ -734,7 +797,10 @@ Copy into a notebook or tick in place:
 - [x] Phase 9d.2 — Secrets Manager → payment Lambdas
 - [x] Phase 9d.3 — SSM hold TTL + seat cap
 - [x] Phase 9d.4 — Least-privilege IAM + permission map
-- [ ] Phase 10 — Signed tickets
+- [x] Phase 10a — Contracts + TicketStore (S3 + KMS) + shared helpers
+- [ ] Phase 10b — Real IssueTicket (sign + S3)
+- [ ] Phase 10c — GET order + presigned URLs
+- [ ] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds
 - [ ] Phase 12 — Reconciler and auditor
 - [ ] Phase 13 — Observability

@@ -8,6 +8,7 @@ import { HoldCapability } from "./constructs/hold-capability";
 import { HttpApi } from "./constructs/http-api";
 import { OrderAccept } from "./constructs/order-accept";
 import { PurchaseSaga } from "./constructs/purchase-saga";
+import { TicketStore } from "./constructs/ticket-store";
 import { addGateholdOutputs } from "./helpers/stack-outputs";
 
 export interface GateholdStackProps extends cdk.StackProps {
@@ -79,6 +80,9 @@ export class GateholdStack extends cdk.Stack {
       ordersTable: data.ordersTable,
     });
 
+    // Phase 10a — bucket + signing key only; IssueTicket grants wire in 10b.
+    const tickets = new TicketStore(this, "Tickets", { stage, removalPolicy });
+
     addGateholdOutputs(this, {
       data,
       config,
@@ -88,6 +92,7 @@ export class GateholdStack extends cdk.Stack {
       purchase,
       http,
       domainEvents,
+      tickets,
     });
   }
 }

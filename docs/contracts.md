@@ -201,7 +201,7 @@ Table name: `gatehold-{stage}-orders`
 | `idempotencyKey` | string | Same client `Idempotency-Key` |
 | `createdAt` | string | ISO-8601 |
 | `amount` | number | Optional until payment |
-| `ticketIds` | string[] | Optional; Phase 6 stub `tkt:{orderId}:{seatId}` until Phase 10 |
+| `ticketIds` | string[] | Optional; `tkt:{orderId}:{seatId}` — ids only on the order; signed artifacts in S3 (Phase 10) |
 | `executionArn` | string | Optional until saga |
 | `failReason` | string | Optional debugging |
 
@@ -497,13 +497,62 @@ After seats are `SOLD`, take the money:
 
 ASL: retry `TransientError` only. Do **not** retry `CapturePaymentError`.
 
-### IssueTicket (saga Task — stub)
+### Signed ticket artifact (Phase 10a+)
 
-Phase 6 writes **placeholder** ticket ids only (no KMS/S3 — Phase 10).
+Orders keep `ticketIds` only. Each id points at a private S3 object.
+
+| Item | Value |
+|---|---|
+| Bucket | `gatehold-{stage}-tickets` |
+| Object key | `tickets/{ticketId}.json` |
+| Ticket id | `tkt:{orderId}:{seatId}` (deterministic) |
+| KMS key | asymmetric `RSA_2048`, `KeyUsage = SIGN_VERIFY` |
+| Signing algorithm | `RSASSA_PSS_SHA_256` |
+| Message | UTF-8 of canonical JSON (fixed key order): `ticketId`, `orderId`, `eventId`, `seatId`, `userId` |
+
+**Payload**
+
+| Field | Type | Notes |
+|---|---|---|
+| `ticketId` | string | `tkt:{orderId}:{seatId}` |
+| `orderId` | string | Owning order |
+| `eventId` | string | Event partition |
+| `seatId` | string | Seat SK |
+| `userId` | string | Buyer / hold owner |
+
+**S3 object body**
+
+```json
+{
+  "payload": {
+    "ticketId": "tkt:ord_1:A-12-07",
+    "orderId": "ord_1",
+    "eventId": "evt_001",
+    "seatId": "A-12-07",
+    "userId": "alice"
+  },
+  "signature": "<base64 KMS signature>"
+}
+```
+
+No private or public key material in the object. Sign creates the signature; Verify checks it (digital signature, not encrypt/decrypt).
+
+**Verify rules (Phase 10d)**
+
+1. `KMS.Verify` over `ticketSigningMessage(payload)` with the ticket signing key → must succeed.
+2. Load event `payload.eventId` → reject if `status` is `CANCELLED` (even when the signature is valid).
+
+Shared helpers: `buildTicketPayload`, `ticketObjectKey`, `ticketSigningMessage`, `TICKET_SIGNING_ALGORITHM` in `services/shared/src/ticket.ts`.
+
+### IssueTicket (saga Task)
+
+**Phase 6–10a (current stub):** writes placeholder `ticketIds` on the order only (no KMS/S3 put yet).
 
 1. For each `seatId`, build deterministic id `tkt:{orderId}:{seatId}`.
 2. `SET ticketIds = if_not_exists(ticketIds, :ticketIds)` on the order (`attribute_exists(orderId)`).
 3. Return saga state plus `ticketIds`.
+
+**Phase 10b:** for each seat, build payload → `KMS.Sign` → `PutObject` artifact → then write `ticketIds` as above.
 
 ASL: retry `TransientError` only. Do **not** retry `IssueTicketError`.
 

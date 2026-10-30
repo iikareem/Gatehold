@@ -499,7 +499,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** `expiresAt` / over-cap 400; purchase path green.
 
-**Status:** Not started.
+**Status:** Done — hold-seat / create-order read SSM via param names; refund-rate stub unused; unit tests green (deploy verify on MiniStack).
 
 #### 9d.4 — Least-privilege IAM + permission map
 
@@ -732,7 +732,7 @@ Copy into a notebook or tick in place:
 - [ ] Phase 9c — Admin group + reserved admin routes
 - [x] Phase 9d.1 — Config construct + StackPort secrets/ssm
 - [x] Phase 9d.2 — Secrets Manager → payment Lambdas
-- [ ] Phase 9d.3 — SSM hold TTL + seat cap
+- [x] Phase 9d.3 — SSM hold TTL + seat cap
 - [ ] Phase 9d.4 — Least-privilege IAM + permission map
 - [ ] Phase 10 — Signed tickets
 - [ ] Phase 11 — Cancellation and mass refunds

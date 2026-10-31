@@ -106,16 +106,17 @@ Update (each seat in the transaction)
          OR (status = HELD AND expiresAt < :now)
 ```
 
-### Group write (Phase 3)
+### Group write (Phase 3) + event gate (Phase 11b)
 
 ```
 TransactWriteItems [
+  ConditionCheck event  CONDITION #status = ON_SALE
   Update seat …   (same SET + CONDITION)
   …
 ]
 ```
 
-Any condition failure → `TransactionCanceledException` → API `409`. Always use a transaction (even for length 1).
+Any condition failure (event not on sale, or seat not claimable) → `TransactionCanceledException` → API `409`. Always use a transaction (even for length 1).
 
 `version` stays on the seat item but is **optional** — not in CONDITION, not in SET.
 

@@ -18,8 +18,8 @@ export interface HoldCapabilityProps {
   stage: string;
   /** Seats table — hold-seat + sweeper get R/W inside this construct. */
   seatsTable: dynamodb.ITable;
-  /** For Lambda env (`EVENTS_TABLE_NAME`); no Events grants here. */
-  eventsTableName: string;
+  /** Events table — hold-seat ConditionCheck ON_SALE (Phase 11b). */
+  eventsTable: dynamodb.ITable;
   /** Hold TTL ms SSM param (Phase 9d.3). */
   holdTtlMsParam: ssm.IStringParameter;
   /** Max seats per hold SSM param (Phase 9d.3). */
@@ -43,13 +43,13 @@ export class HoldCapability extends Construct {
     const {
       stage,
       seatsTable,
-      eventsTableName,
+      eventsTable,
       holdTtlMsParam,
       maxHoldSeatsParam,
     } = props;
 
     const lambdaEnv = baseLambdaEnv(stage, {
-      eventsTableName,
+      eventsTableName: eventsTable.tableName,
       seatsTableName: seatsTable.tableName,
     });
 
@@ -73,7 +73,9 @@ export class HoldCapability extends Construct {
       environment: lambdaEnv,
     });
 
-    // hold-seat: TransactWrite only. sweeper: Scan + Update → needs read+write.
+    // hold-seat: event ConditionCheck (read) + seats TransactWrite.
+    // sweeper: Scan + Update → needs read+write on seats only.
+    eventsTable.grantReadData(this.holdSeatFn);
     grantTableWriteWithTransact(seatsTable, this.holdSeatFn);
     seatsTable.grantReadWriteData(this.holdSweeperFn);
     holdTtlMsParam.grantRead(this.holdSeatFn);

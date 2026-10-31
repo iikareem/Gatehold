@@ -19,14 +19,15 @@ import {
 export const MAX_HOLD_SEATS = DEFAULT_MAX_HOLD_SEATS;
 
 /**
- * Phase 3 / 9d.3 — hold 1..N seats via TransactWriteItems.
- * TTL + seat cap from SSM Parameter Store (env overrides for unit tests).
+ * Phase 3 / 9d.3 / 11b — hold 1..N seats via TransactWriteItems.
+ * Event must be ON_SALE (ConditionCheck). TTL + seat cap from SSM.
  * Identity: Cognito JWT `sub` from API Gateway authorizer (Phase 9b).
  */
 export async function handler(
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> {
   const seatsTable = requireEnv("SEATS_TABLE_NAME");
+  const eventsTable = requireEnv("EVENTS_TABLE_NAME");
   const eventId = event.pathParameters?.eventId;
   if (!eventId) {
     return json(400, { message: "missing eventId path parameter" });
@@ -52,6 +53,7 @@ export async function handler(
 
   const transactInput = buildHoldSeatsTransactWriteInput({
     tableName: seatsTable,
+    eventsTableName: eventsTable,
     eventId,
     seatIds,
     holdId,

@@ -652,6 +652,33 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Status:** Done — contracts + DataPlane stream/table + shared builders/tests.
 
+### Slice 11b — Cancel API stops selling
+
+**Goal:** Admin cancel flips the event; holds/orders/VerifyHold reject when not `ON_SALE`.
+
+**Build**
+
+- `POST /admin/events/{eventId}/cancel`: conditional `ON_SALE → CANCELLING` + `cancelledAt`; `200` / `409`
+- Hold transact: event `ON_SALE` ConditionCheck (orders + VerifyHold already gated)
+
+**Verify:** admin cancel → `CANCELLING`; second cancel → `409`; hold/order on cancelling event → `409`
+
+**Status:** Done — cancel Lambda + hold event gate + unit tests.
+
+### Slice 11c — Go refund orchestrator + refund queue
+
+**Goal:** When an event becomes `CANCELLING`, create/claim a `RefundBatch`, page `CONFIRMED` orders, enqueue refund jobs with checkpoint resume.
+
+**Build**
+
+- SQS `gatehold-{stage}-refunds` + DLQ
+- `go/refund-orchestrator`: Events stream filter `ON_SALE → CANCELLING`; idempotent batch claim (`refundBatchId`); Query GSI `eventId-status`; `SendMessageBatch`; checkpoint `lastEvaluatedKey` / `fanOutComplete`
+- CDK `CancelRefund` construct + stack outputs
+
+**Verify:** unit tests for stream filter + multi-page fan-out; synth exposes `RefundQueueUrl` / `RefundOrchestratorFunctionName`
+
+**Status:** Done — Go orchestrator + queue/DLQ + CDK wiring.
+
 ---
 
 ## Phase 12 — Reconciler and auditor

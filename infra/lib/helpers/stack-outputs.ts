@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import type { Auth } from "../constructs/auth";
+import type { CancelRefund } from "../constructs/cancel-refund";
 import type { Config } from "../constructs/config";
 import type { DataPlane } from "../constructs/data-plane";
 import type { DomainEvents } from "../constructs/domain-events";
@@ -25,6 +26,7 @@ export function addGateholdOutputs(
     http: HttpApi;
     domainEvents: DomainEvents;
     tickets: TicketStore;
+    cancelRefund: CancelRefund;
   },
 ): void {
   const {
@@ -37,6 +39,7 @@ export function addGateholdOutputs(
     http,
     domainEvents,
     tickets,
+    cancelRefund,
   } = parts;
 
   new cdk.CfnOutput(stack, "ApiUrl", {
@@ -195,5 +198,17 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "TicketSigningKeyArn", {
     value: tickets.signingKey.keyArn,
     description: "KMS key ARN for ticket Sign/Verify (Phase 10a)",
+  });
+  new cdk.CfnOutput(stack, "RefundQueueUrl", {
+    value: cancelRefund.refundQueue.queueUrl,
+    description: "Phase 11c — mass-refund job queue",
+  });
+  new cdk.CfnOutput(stack, "RefundDlqUrl", {
+    value: cancelRefund.refundDlq.queueUrl,
+    description: "Phase 11c — mass-refund DLQ",
+  });
+  new cdk.CfnOutput(stack, "RefundOrchestratorFunctionName", {
+    value: cancelRefund.refundOrchestratorFn.functionName,
+    description: "Phase 11c — Events stream → RefundBatch + SQS fan-out",
   });
 }

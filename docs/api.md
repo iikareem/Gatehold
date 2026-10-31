@@ -365,7 +365,7 @@ Save the printed string — that is the **IdToken** (JWT). Send it as:
 Authorization: Bearer <IdToken>
 ```
 
-Admin routes (`/admin/*`) need an IdToken whose `cognito:groups` includes `admin`; fans get 403, admins get `501` stubs until Phase 11.
+Admin routes (`/admin/*`) need an IdToken whose `cognito:groups` includes `admin`; fans get 403. `POST .../cancel` is live (Phase 11b → `CANCELLING`); `GET .../refunds` remains `501` until later Phase 11 slices.
 
 ### Decode claims (optional)
 
@@ -381,4 +381,4 @@ Expect at least: `sub`, `cognito:username`, `iss` (matches `UserPoolIssuer`). Fo
 Do not expect these to work:
 
 - `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
-- Real cancel / refund behavior — Phase 11 (`501` stubs on admin routes for now)
+- Mass refund orchestrator/worker + `GET .../refunds` — remaining Phase 11 slices (`cancel` is 11b)

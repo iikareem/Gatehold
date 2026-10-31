@@ -44,16 +44,22 @@ describe("hold-seat handler", () => {
   afterEach(() => {
     mock.restoreAll();
     delete process.env.SEATS_TABLE_NAME;
+    delete process.env.EVENTS_TABLE_NAME;
   });
 
-  it("returns 401 when authorizer claims are missing", async () => {
+  function setTables() {
     process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    process.env.EVENTS_TABLE_NAME = "gatehold-dev-events";
+  }
+
+  it("returns 401 when authorizer claims are missing", async () => {
+    setTables();
     const result = await handler(holdEvent({ sub: null }));
     assert.equal(result.statusCode, 401);
   });
 
   it("returns 201 when the conditional update succeeds", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     const send = mock.fn(async () => ({}));
     mock.method(dynamodb, "getDocClient", () => ({ send }));
 
@@ -68,7 +74,7 @@ describe("hold-seat handler", () => {
   });
 
   it("returns 409 when the transaction is canceled (live hold)", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     mock.method(dynamodb, "getDocClient", () => ({
       send: async () => {
         const err = new Error("Transaction cancelled");
@@ -85,7 +91,7 @@ describe("hold-seat handler", () => {
   });
 
   it("returns 400 when seatIds is empty or over the cap", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     mock.method(dynamodb, "getDocClient", () => ({
       send: async () => {
         throw new Error("should not call DynamoDB");
@@ -105,7 +111,7 @@ describe("hold-seat handler", () => {
   });
 
   it("returns 201 for multiple seatIds via one TransactWrite", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     const send = mock.fn(async () => ({}));
     mock.method(dynamodb, "getDocClient", () => ({ send }));
 
@@ -122,7 +128,7 @@ describe("hold-seat handler", () => {
   });
 
   it("returns 409 for multi-seat when the transaction is canceled", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     mock.method(dynamodb, "getDocClient", () => ({
       send: async () => {
         const err = new Error("Transaction cancelled");
@@ -143,7 +149,7 @@ describe("hold-seat handler", () => {
   });
 
   it("returns 400 when a seatId entry is empty", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     mock.method(dynamodb, "getDocClient", () => ({
       send: async () => {
         throw new Error("should not call DynamoDB");
@@ -157,7 +163,7 @@ describe("hold-seat handler", () => {
   });
 
   it("returns 400 when eventId is missing", async () => {
-    process.env.SEATS_TABLE_NAME = "gatehold-dev-seats";
+    setTables();
     const result = await handler(holdEvent({ eventId: null }));
     assert.equal(result.statusCode, 400);
   });

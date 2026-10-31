@@ -1,6 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { Auth } from "./constructs/auth";
+import { CancelRefund } from "./constructs/cancel-refund";
 import { Config } from "./constructs/config";
 import { DataPlane } from "./constructs/data-plane";
 import { DomainEvents } from "./constructs/domain-events";
@@ -37,7 +38,7 @@ export class GateholdStack extends cdk.Stack {
     const holds = new HoldCapability(this, "Holds", {
       stage,
       seatsTable: data.seatsTable,
-      eventsTableName: data.eventsTable.tableName,
+      eventsTable: data.eventsTable,
       holdTtlMsParam: config.holdTtlMsParam,
       maxHoldSeatsParam: config.maxHoldSeatsParam,
     });
@@ -88,6 +89,15 @@ export class GateholdStack extends cdk.Stack {
       ordersTable: data.ordersTable,
     });
 
+    // Phase 11c — Events stream → refund orchestrator → refunds SQS (+ DLQ).
+    const cancelRefund = new CancelRefund(this, "CancelRefund", {
+      stage,
+      removalPolicy,
+      eventsTable: data.eventsTable,
+      ordersTable: data.ordersTable,
+      refundBatchesTable: data.refundBatchesTable,
+    });
+
     addGateholdOutputs(this, {
       data,
       config,
@@ -98,6 +108,7 @@ export class GateholdStack extends cdk.Stack {
       http,
       domainEvents,
       tickets,
+      cancelRefund,
     });
   }
 }

@@ -17,6 +17,8 @@ export interface HoldSeatUpdateParams {
 
 export interface HoldSeatsTransactParams {
   tableName: string;
+  /** Events table — ConditionCheck status = ON_SALE (Phase 11b). */
+  eventsTableName: string;
   eventId: string;
   seatIds: string[];
   holdId: string;
@@ -56,27 +58,50 @@ export function buildHoldSeatUpdateInput(params: HoldSeatUpdateParams) {
 }
 
 /**
- * Builds TransactWriteCommand input: one Update per seat, same SET/CONDITION.
+ * Builds TransactWriteCommand input: event ON_SALE check + one Update per seat.
  * Pure — handler only does `new TransactWriteCommand(buildHoldSeatsTransactWriteInput(...))`.
  */
 export function buildHoldSeatsTransactWriteInput(
   params: HoldSeatsTransactParams,
 ) {
-  const { tableName, eventId, seatIds, holdId, holdOwner, expiresAt, now } =
-    params;
+  const {
+    tableName,
+    eventsTableName,
+    eventId,
+    seatIds,
+    holdId,
+    holdOwner,
+    expiresAt,
+    now,
+  } = params;
 
   return {
-    TransactItems: seatIds.map((seatId) => ({
-      Update: buildHoldSeatUpdateInput({
-        tableName,
-        eventId,
-        seatId,
-        holdId,
-        holdOwner,
-        expiresAt,
-        now,
-      }),
-    })),
+    TransactItems: [
+      {
+        ConditionCheck: {
+          TableName: eventsTableName,
+          Key: { eventId },
+          ConditionExpression: "#status = :onSale",
+          ExpressionAttributeNames: {
+            "#status": "status",
+          },
+          ExpressionAttributeValues: {
+            ":onSale": "ON_SALE",
+          },
+        },
+      },
+      ...seatIds.map((seatId) => ({
+        Update: buildHoldSeatUpdateInput({
+          tableName,
+          eventId,
+          seatId,
+          holdId,
+          holdOwner,
+          expiresAt,
+          now,
+        }),
+      })),
+    ],
   };
 }
 

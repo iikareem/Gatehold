@@ -121,12 +121,24 @@ export class HttpApi extends Construct {
       },
     });
 
+    // Phase 11b — admin cancel: ON_SALE → CANCELLING.
     this.cancelFn = createNodeFn(this, "CancelFn", {
       stage,
       name: "cancel",
       entry: path.join(projectRoot, "services/cancel/src/handler.ts"),
-      environment: { STAGE: stage },
+      environment: {
+        STAGE: stage,
+        EVENTS_TABLE_NAME: eventsTable.tableName,
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
     });
+    eventsTable.grantWriteData(this.cancelFn);
 
     this.refundsFn = createNodeFn(this, "RefundsFn", {
       stage,

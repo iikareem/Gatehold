@@ -571,16 +571,17 @@ gatehold/
 │   ├── hold-seat/            # single and group holds
 │   ├── create-order/
 │   ├── saga-steps/           # verify, lock, authorize, confirm, capture, issue
-│   ├── cancel-event/
-│   ├── refund-orchestrator/
-│   ├── refund-worker/
+│   ├── cancel/               # admin cancel API (ON_SALE → CANCELLING)
+│   ├── refund-worker/        # Phase 11d — per-order refund (TS)
 │   └── shared/               # DynamoDB helpers, idempotency, types
 ├── scripts/                  # seed + host-side smoke helpers
 ├── go/                       # Go components
 │   ├── mock-payment/         # configurable provider (latency, errors, duplicates, rate limit)
 │   ├── hold-sweeper/
+│   ├── refund-orchestrator/  # Phase 11c — Events stream → RefundBatch + SQS
 │   ├── reconciler/
 │   ├── stream-relay/
+│   ├── notify-email/
 │   ├── loadgen/              # concurrent load generator
 │   └── auditor/              # independent invariant checker
 ├── tests/

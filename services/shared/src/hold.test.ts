@@ -49,6 +49,7 @@ describe("buildHoldSeatUpdateInput", () => {
 describe("buildHoldSeatsTransactWriteInput", () => {
   const input = buildHoldSeatsTransactWriteInput({
     tableName: "gatehold-dev-seats",
+    eventsTableName: "gatehold-dev-events",
     eventId: "evt_001",
     seatIds: ["A-12-10", "A-12-11"],
     holdId: "h_group",
@@ -57,24 +58,41 @@ describe("buildHoldSeatsTransactWriteInput", () => {
     now: "2026-11-01T20:00:00.000Z",
   });
 
-  it("wraps one Update per seat with the same holdId", () => {
-    assert.equal(input.TransactItems.length, 2);
-    assert.deepEqual(input.TransactItems[0].Update.Key, {
+  it("checks event ON_SALE then one Update per seat", () => {
+    assert.equal(input.TransactItems.length, 3);
+    const check = input.TransactItems[0] as {
+      ConditionCheck: {
+        TableName: string;
+        ExpressionAttributeValues: Record<string, string>;
+      };
+    };
+    const update0 = input.TransactItems[1] as {
+      Update: {
+        Key: { eventId: string; seatId: string };
+        ExpressionAttributeValues: Record<string, string>;
+      };
+    };
+    const update1 = input.TransactItems[2] as {
+      Update: {
+        Key: { eventId: string; seatId: string };
+        ExpressionAttributeValues: Record<string, string>;
+      };
+    };
+    assert.equal(check.ConditionCheck.TableName, "gatehold-dev-events");
+    assert.equal(
+      check.ConditionCheck.ExpressionAttributeValues[":onSale"],
+      "ON_SALE",
+    );
+    assert.deepEqual(update0.Update.Key, {
       eventId: "evt_001",
       seatId: "A-12-10",
     });
-    assert.deepEqual(input.TransactItems[1].Update.Key, {
+    assert.deepEqual(update1.Update.Key, {
       eventId: "evt_001",
       seatId: "A-12-11",
     });
-    assert.equal(
-      input.TransactItems[0].Update.ExpressionAttributeValues[":holdId"],
-      "h_group",
-    );
-    assert.equal(
-      input.TransactItems[1].Update.ExpressionAttributeValues[":holdId"],
-      "h_group",
-    );
+    assert.equal(update0.Update.ExpressionAttributeValues[":holdId"], "h_group");
+    assert.equal(update1.Update.ExpressionAttributeValues[":holdId"], "h_group");
   });
 });
 

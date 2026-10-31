@@ -15,7 +15,7 @@ only when the helper is too wide or missing an action the call graph needs.
 | Lambda | AWS actions / resources |
 |---|---|
 | **health** | DynamoDB **R** seats (`GetItem` for `?eventId=&seatId=`) |
-| **hold-seat** | DynamoDB **W+Transact** seats · SSM **GetParameter** hold-ttl + max-seats |
+| **hold-seat** | DynamoDB **R** events (ConditionCheck ON_SALE) · **W+Transact** seats · SSM **GetParameter** hold-ttl + max-seats |
 | **hold-sweeper** | DynamoDB **RW** seats (`Scan` + `UpdateItem`) |
 | **create-order** | DynamoDB **R** events · **W+Transact** seats · **W+Transact** orders · **RW** idempotency · SQS **SendMessage** orders queue · SSM **GetParameter** max-seats |
 | **get-order** | DynamoDB **R** orders · S3 **GetObject** tickets bucket (presigned download URLs) |
@@ -36,7 +36,8 @@ only when the helper is too wide or missing an action the call graph needs.
 | **order-confirmed-logger** | (logs only — invoked by EventBridge rule) |
 | **notify-email** | SES **SendEmail/SendRawEmail** on From identity `noreply@gatehold.local` · SES **VerifyEmailIdentity** `*` (sandbox From+To) · SQS consume notifications |
 | **admin-authorizer** | (JWT verify in-process — no AWS data plane grants) |
-| **cancel / refunds** | stubs until 11b+ — DataPlane has Events stream + RefundBatches (11a); grants land with cancel/orchestrator/worker |
+| **cancel** | DynamoDB **W** events (`ON_SALE → CANCELLING`) |
+| **refunds (GET)** | stub `501` until 11e — no data-plane grants yet |
 
 ## 9d.4 changes (what got narrower)
 

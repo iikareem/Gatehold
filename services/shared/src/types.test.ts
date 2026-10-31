@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   DEFAULT_ORDER_AMOUNT_CENTS,
   LEDGER_CURRENCY_USD,
+  ORDERS_EVENT_STATUS_INDEX,
   paymentAuthKey,
   paymentCaptureKey,
   paymentRefundKey,
@@ -34,5 +35,11 @@ describe("ledger defaults", () => {
   it("uses fixed cents and USD until pricing exists", () => {
     assert.equal(DEFAULT_ORDER_AMOUNT_CENTS, 5000);
     assert.equal(LEDGER_CURRENCY_USD, "USD");
+  });
+});
+
+describe("orders cancel fan-out index", () => {
+  it("matches contracts GSI name", () => {
+    assert.equal(ORDERS_EVENT_STATUS_INDEX, "eventId-status");
   });
 });

@@ -15,7 +15,11 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 
 ## Order status
 
-`PENDING` → `CONFIRMED` | `FAILED` | `REFUND_PENDING` → `REFUNDED`
+```
+PENDING → CONFIRMED | FAILED
+PENDING → REFUNDED          (saga compensation after capture)
+CONFIRMED → REFUND_PENDING → REFUNDED   (event cancel / mass refund)
+```
 
 ## Events table (Phase 0)
 
@@ -27,6 +31,8 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 | `createdAt` | string | ISO-8601 |
 | `cancelledAt` | string | Optional; set on cancel |
 | `refundBatchId` | string | Optional; set when refund batch starts |
+
+**Stream (Phase 11a):** `NEW_AND_OLD_IMAGES`. Orchestrator reacts only to `MODIFY` with `old.status = ON_SALE` and `new.status = CANCELLING`. The later `CANCELLING → CANCELLED` write must not start another fan-out.
 
 ## Seats table (Phase 0)
 
@@ -48,6 +54,7 @@ Keep TypeScript types in `services/shared/src` aligned with this file.
 - Tables: `gatehold-{stage}-events`, `gatehold-{stage}-seats`
 - Phase 4+: `gatehold-{stage}-orders`, `gatehold-{stage}-idempotency`
 - Phase 6+: `gatehold-{stage}-ledger`
+- Phase 11+: `gatehold-{stage}-refund-batches`
 
 ## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
@@ -853,8 +860,89 @@ SES sandbox / MiniStack require verified identities: `notify-email` calls `Verif
 
 Local inspect: `GET /_ministack/ses/messages`. Saga still never calls SES. Duplicate stream deliveries may send twice (ok for Phase 8).
 
+## Phase 11 — Event cancellation and mass refunds
+
+**Flow:** Admin cancel → event `ON_SALE → CANCELLING` → Events stream → Go orchestrator creates/claims `RefundBatch`, pages orders GSI `eventId-status` for `CONFIRMED`, enqueues refund jobs → TS workers refund once → when drained, batch terminal + event `CANCELLING → CANCELLED`.
+
+### Cancel — `POST /admin/events/{eventId}/cancel`
+
+**Auth:** Cognito JWT; `cognito:groups` contains `admin` (Phase 9c authorizer). Fans → `403`.
+
+**Success — `200`:**
+
+```json
+{ "eventId": "evt_001", "status": "CANCELLING" }
+```
+
+Conditional write:
+
+```
+Update event
+  SET #status = CANCELLING, cancelledAt = :now
+  CONDITION #status = ON_SALE
+```
+
+**Conflict — `409`:** event missing or status is not `ON_SALE` (already `CANCELLING` / `CANCELLED`).
+
+`refundBatchId` is set by the orchestrator when the batch is created/claimed (not required on the cancel response).
+
+Selling paths already require event `ON_SALE` (create-order ConditionCheck, VerifyHold). New holds should likewise reject when not on sale (Slice 11b).
+
+### RefundBatches table
+
+Table name: `gatehold-{stage}-refund-batches`
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `batchId` (PK) | string | e.g. `rb_…` |
+| `eventId` | string | Cancelled event |
+| `status` | string | `RUNNING` \| `COMPLETE` \| `COMPLETE_WITH_FAILURES` |
+| `enqueued` | number | Orders pushed to the refund queue (`ADD`) |
+| `succeeded` | number | Orders marked `REFUNDED` (`ADD`) |
+| `failed` | number | Terminal worker failures / DLQ (`ADD`) |
+| `startedAt` | string | ISO-8601 |
+| `finishedAt` | string | Optional; set when batch leaves `RUNNING` |
+| `lastEvaluatedKey` | map | Optional; opaque DynamoDB Query resume token for orders GSI paging |
+| `fanOutComplete` | boolean | Optional; `true` when Query returned no more `CONFIRMED` pages |
+| `reportKey` | string | Optional; S3 report object key (later) |
+
+**Checkpoint:** after each Query page, persist `lastEvaluatedKey` (and bump `enqueued`). Stream/Lambda retry or sweep reloads the batch and continues from that cursor. Idempotent batch create: reuse `event.refundBatchId` when present; otherwise Put batch + set `refundBatchId` on the event conditionally.
+
+### Refund queue message
+
+Queue: `gatehold-{stage}-refunds` (+ DLQ). One message per paid order:
+
+```json
+{
+  "orderId": "ord_…",
+  "eventId": "evt_001",
+  "batchId": "rb_…"
+}
+```
+
+Worker loads `authorizationId` / amount from ledger `CAPTURE` (`pay:capture:{orderId}`). Duplicate deliveries are safe: same `pay:refund:{orderId}` + conditional ledger `REFUND` + conditional order status writes.
+
+### Cancel-path order transitions
+
+```
+CONFIRMED → REFUND_PENDING   (worker claims job)
+REFUND_PENDING → REFUNDED    (provider + ledger REFUND succeeded)
+```
+
+Saga compensation remains `PENDING → REFUNDED` via existing `MarkRefunded` (unchanged).
+
+### Events stream filter (orchestrator)
+
+| Field | Required |
+|---|---|
+| `eventName` | `MODIFY` |
+| `OldImage.status` | `ON_SALE` |
+| `NewImage.status` | `CANCELLING` |
+| `NewImage.eventId` | non-empty |
+
+Ignore all other event-table writes (including `CANCELLING → CANCELLED`).
+
 ## TODO (later phases)
 
-- SQS message shapes for refund jobs
 - Further EventBridge detail types (`OrderFailed`, `OrderRefunded`, audit, analytics)
 - Outbox or DynamoDB Streams → SQS (harden enqueue after Phase 4)

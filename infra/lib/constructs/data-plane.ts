@@ -19,6 +19,8 @@ export class DataPlane extends Construct {
   readonly ordersTable: dynamodb.Table;
   readonly idempotencyTable: dynamodb.Table;
   readonly ledgerTable: dynamodb.Table;
+  /** Phase 11a — mass-refund batch checkpoint + counters. */
+  readonly refundBatchesTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: DataPlaneProps) {
     super(scope, id);
@@ -30,6 +32,8 @@ export class DataPlane extends Construct {
       partitionKey: { name: "eventId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
+      // Phase 11a — refund orchestrator watches ON_SALE → CANCELLING.
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
 
     this.seatsTable = new dynamodb.Table(this, "SeatsTable", {
@@ -71,6 +75,13 @@ export class DataPlane extends Construct {
     this.ledgerTable = new dynamodb.Table(this, "LedgerTable", {
       tableName: `gatehold-${stage}-ledger`,
       partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy,
+    });
+
+    this.refundBatchesTable = new dynamodb.Table(this, "RefundBatchesTable", {
+      tableName: `gatehold-${stage}-refund-batches`,
+      partitionKey: { name: "batchId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
     });

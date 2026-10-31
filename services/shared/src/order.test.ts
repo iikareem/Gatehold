@@ -11,6 +11,8 @@ import {
   buildMarkConfirmedUpdateInput,
   buildMarkFailedUpdateInput,
   buildMarkRefundedUpdateInput,
+  buildClaimCancelRefundUpdateInput,
+  buildCompleteCancelRefundUpdateInput,
   buildReleaseSeatUpdateInput,
   buildReleaseSeatsTransactWriteInput,
   idempotencyTtlEpoch,
@@ -335,6 +337,39 @@ describe("buildMarkRefundedUpdateInput", () => {
       input.ExpressionAttributeValues[":failReason"],
       "IssueTicketError",
     );
+  });
+});
+
+describe("buildClaimCancelRefundUpdateInput", () => {
+  it("moves CONFIRMED or REFUND_PENDING to REFUND_PENDING", () => {
+    const input = buildClaimCancelRefundUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+    });
+    assert.equal(input.UpdateExpression, "SET #status = :refundPending");
+    assert.match(
+      input.ConditionExpression,
+      /#status = :confirmed OR #status = :refundPending/,
+    );
+    assert.equal(
+      input.ExpressionAttributeValues[":refundPending"],
+      "REFUND_PENDING",
+    );
+  });
+});
+
+describe("buildCompleteCancelRefundUpdateInput", () => {
+  it("moves REFUND_PENDING or REFUNDED to REFUNDED", () => {
+    const input = buildCompleteCancelRefundUpdateInput({
+      tableName: "gatehold-dev-orders",
+      orderId: "ord_1",
+    });
+    assert.equal(input.UpdateExpression, "SET #status = :refunded");
+    assert.match(
+      input.ConditionExpression,
+      /#status = :refundPending OR #status = :refunded/,
+    );
+    assert.equal(input.ExpressionAttributeValues[":refunded"], "REFUNDED");
   });
 });
 

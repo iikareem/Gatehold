@@ -434,7 +434,7 @@ Append-only entries (`AUTH`, `CAPTURE`, `VOID`, `REFUND`) with a conditional wri
 
 ### RefundBatches
 
-`batchId` (PK), `eventId`, `total`, `succeeded`, `failed`, `status` (`RUNNING`, `COMPLETE`, `COMPLETE_WITH_FAILURES`), `startedAt`, `finishedAt`, `reportKey`. Counters use atomic `ADD`.
+`batchId` (PK), `eventId`, `enqueued`, `succeeded`, `failed`, `status` (`RUNNING`, `COMPLETE`, `COMPLETE_WITH_FAILURES`), `startedAt`, `finishedAt`, optional `lastEvaluatedKey` / `fanOutComplete` (orchestrator checkpoint), optional `reportKey`. Counters use atomic `ADD`.
 
 ### Idempotency
 

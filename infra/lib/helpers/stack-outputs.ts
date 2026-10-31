@@ -76,6 +76,10 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "LedgerTableName", {
     value: data.ledgerTable.tableName,
   });
+  new cdk.CfnOutput(stack, "RefundBatchesTableName", {
+    value: data.refundBatchesTable.tableName,
+    description: "Phase 11a — mass-refund batch checkpoint + counters",
+  });
   new cdk.CfnOutput(stack, "OrderQueueUrl", {
     value: orders.orderQueue.queueUrl,
   });

@@ -638,6 +638,20 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Prerequisite:** Saga capture + ledger + mock refund APIs. Do not start this phase on a happy-path-only payment stub.
 
+### Slice 11a — Contracts + data plane
+
+**Goal:** Schema and infra primitives with no cancel/refund product behavior yet.
+
+**Build**
+
+- Contracts: RefundBatch, refund SQS message, cancel API shape, Events stream filter, cancel-path order transitions
+- Events table stream (`NEW_AND_OLD_IMAGES`); `RefundBatches` table; stack output
+- Shared builders: cancel event, attach batch id, mark cancelled; refund-batch put/checkpoint/counters/complete; claim/complete cancel refund on orders
+
+**Verify:** unit tests for builders; CDK synth exposes `RefundBatchesTableName` and Events stream
+
+**Status:** Done — contracts + DataPlane stream/table + shared builders/tests.
+
 ---
 
 ## Phase 12 — Reconciler and auditor

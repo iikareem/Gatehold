@@ -427,6 +427,58 @@ export function buildMarkRefundedUpdateInput(params: MarkRefundedUpdateParams) {
   };
 }
 
+export interface ClaimCancelRefundUpdateParams {
+  tableName: string;
+  orderId: string;
+}
+
+/**
+ * Phase 11 worker claim: CONFIRMED → REFUND_PENDING.
+ * Idempotent if already REFUND_PENDING (retry after crash).
+ */
+export function buildClaimCancelRefundUpdateInput(
+  params: ClaimCancelRefundUpdateParams,
+) {
+  return {
+    TableName: params.tableName,
+    Key: { orderId: params.orderId },
+    UpdateExpression: "SET #status = :refundPending",
+    ConditionExpression:
+      "attribute_exists(orderId) AND (#status = :confirmed OR #status = :refundPending)",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: {
+      ":refundPending": "REFUND_PENDING",
+      ":confirmed": "CONFIRMED",
+    },
+  };
+}
+
+export interface CompleteCancelRefundUpdateParams {
+  tableName: string;
+  orderId: string;
+}
+
+/**
+ * Phase 11 worker success: REFUND_PENDING → REFUNDED.
+ * Idempotent if already REFUNDED (duplicate SQS / retry after ledger success).
+ */
+export function buildCompleteCancelRefundUpdateInput(
+  params: CompleteCancelRefundUpdateParams,
+) {
+  return {
+    TableName: params.tableName,
+    Key: { orderId: params.orderId },
+    UpdateExpression: "SET #status = :refunded",
+    ConditionExpression:
+      "attribute_exists(orderId) AND (#status = :refundPending OR #status = :refunded)",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: {
+      ":refunded": "REFUNDED",
+      ":refundPending": "REFUND_PENDING",
+    },
+  };
+}
+
 /** Compute payUntil ISO string from a reference time (defaults to Date.now()). */
 export function payUntilAt(
   nowMs: number = Date.now(),

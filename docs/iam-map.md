@@ -36,7 +36,7 @@ only when the helper is too wide or missing an action the call graph needs.
 | **order-confirmed-logger** | (logs only — invoked by EventBridge rule) |
 | **notify-email** | SES **SendEmail/SendRawEmail** on From identity `noreply@gatehold.local` · SES **VerifyEmailIdentity** `*` (sandbox From+To) · SQS consume notifications |
 | **admin-authorizer** | (JWT verify in-process — no AWS data plane grants) |
-| **cancel / refunds** | stubs — no data-plane grants until Phase 11 |
+| **cancel / refunds** | stubs until 11b+ — DataPlane has Events stream + RefundBatches (11a); grants land with cancel/orchestrator/worker |
 
 ## 9d.4 changes (what got narrower)
 

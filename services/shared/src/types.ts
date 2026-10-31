@@ -114,10 +114,48 @@ export interface LedgerItem {
   createdAt: string;
 }
 
+/** Refund batch lifecycle — keep in sync with docs/contracts.md Phase 11. */
+export type RefundBatchStatus =
+  | "RUNNING"
+  | "COMPLETE"
+  | "COMPLETE_WITH_FAILURES";
+
+/**
+ * One cancel/mass-refund run in `gatehold-{stage}-refund-batches`.
+ * Counters use atomic ADD from orchestrator / workers.
+ */
+export interface RefundBatchItem {
+  batchId: string;
+  eventId: string;
+  status: RefundBatchStatus;
+  enqueued: number;
+  succeeded: number;
+  failed: number;
+  startedAt: string;
+  finishedAt?: string;
+  /** Opaque DynamoDB Query ExclusiveStartKey for orders GSI resume. */
+  lastEvaluatedKey?: Record<string, unknown>;
+  fanOutComplete?: boolean;
+  reportKey?: string;
+}
+
+/**
+ * Phase 11 refund queue payload — one paid order per message.
+ * Worker loads authorizationId / amount from ledger CAPTURE.
+ */
+export interface RefundQueueMessage {
+  orderId: string;
+  eventId: string;
+  batchId: string;
+}
+
 /** Default authorize/capture amount (cents) until pricing exists. */
 export const DEFAULT_ORDER_AMOUNT_CENTS = 5000;
 
 export const LEDGER_CURRENCY_USD = "USD";
+
+/** Orders GSI used by cancel fan-out (PK eventId, SK status). */
+export const ORDERS_EVENT_STATUS_INDEX = "eventId-status";
 
 /** Payment idempotency key helpers — same formats as mock-payment contracts. */
 export function paymentAuthKey(orderId: string): string {

@@ -211,4 +211,8 @@ export function addGateholdOutputs(
     value: cancelRefund.refundOrchestratorFn.functionName,
     description: "Phase 11c — Events stream → RefundBatch + SQS fan-out",
   });
+  new cdk.CfnOutput(stack, "RefundWorkerFunctionName", {
+    value: cancelRefund.refundWorkerFn.functionName,
+    description: "Phase 11d — SQS refunds → provider + ledger + REFUNDED",
+  });
 }

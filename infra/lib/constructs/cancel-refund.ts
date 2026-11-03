@@ -3,10 +3,12 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import {
   createGoFn,
+  createNodeFn,
   dockerReachableEndpoint,
   projectRoot,
 } from "../helpers/node-fn";
@@ -17,19 +19,22 @@ export interface CancelRefundProps {
   /** Events table with NEW_AND_OLD_IMAGES stream (ON_SALE → CANCELLING). */
   eventsTable: dynamodb.ITable;
   ordersTable: dynamodb.ITable;
+  ledgerTable: dynamodb.ITable;
   refundBatchesTable: dynamodb.ITable;
+  mockPaymentSecret: secretsmanager.ISecret;
 }
 
 /**
- * Phase 11c — cancel refund fan-out plane.
+ * Phase 11 — cancel refund plane.
  *
- * Events stream → Go refund-orchestrator → RefundBatch checkpoint + SQS refunds (+ DLQ).
- * Worker attachment is Slice 11d.
+ * 11c: Events stream → Go refund-orchestrator → RefundBatch + SQS refunds (+ DLQ).
+ * 11d: SQS → TS refund-worker → provider refund + ledger + order REFUNDED.
  */
 export class CancelRefund extends Construct {
   readonly refundDlq: sqs.Queue;
   readonly refundQueue: sqs.Queue;
   readonly refundOrchestratorFn: lambda.IFunction;
+  readonly refundWorkerFn: lambda.IFunction;
 
   constructor(scope: Construct, id: string, props: CancelRefundProps) {
     super(scope, id);
@@ -39,7 +44,9 @@ export class CancelRefund extends Construct {
       removalPolicy,
       eventsTable,
       ordersTable,
+      ledgerTable,
       refundBatchesTable,
+      mockPaymentSecret,
     } = props;
 
     this.refundDlq = new sqs.Queue(this, "RefundDlq", {
@@ -50,7 +57,7 @@ export class CancelRefund extends Construct {
 
     this.refundQueue = new sqs.Queue(this, "RefundQueue", {
       queueName: `gatehold-${stage}-refunds`,
-      // Must exceed refund-worker timeout (Slice 11d).
+      // Must exceed refund-worker timeout.
       visibilityTimeout: cdk.Duration.seconds(90),
       retentionPeriod: cdk.Duration.days(4),
       removalPolicy,
@@ -67,7 +74,6 @@ export class CancelRefund extends Construct {
         projectRoot,
         "go/refund-orchestrator/dist/refund-orchestrator.zip",
       ),
-      // Large events may need several Query + SendMessageBatch pages.
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       environment: {
@@ -99,6 +105,40 @@ export class CancelRefund extends Construct {
         batchSize: 1,
         retryAttempts: 3,
         reportBatchItemFailures: false,
+      }),
+    );
+
+    this.refundWorkerFn = createNodeFn(this, "RefundWorkerFn", {
+      stage,
+      name: "refund-worker",
+      entry: path.join(projectRoot, "services/refund-worker/src/handler.ts"),
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        STAGE: stage,
+        ORDERS_TABLE_NAME: ordersTable.tableName,
+        LEDGER_TABLE_NAME: ledgerTable.tableName,
+        REFUND_BATCHES_TABLE_NAME: refundBatchesTable.tableName,
+        MOCK_PAYMENT_SECRET_ARN: mockPaymentSecret.secretArn,
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
+    });
+
+    ordersTable.grantReadWriteData(this.refundWorkerFn);
+    ledgerTable.grantReadWriteData(this.refundWorkerFn);
+    refundBatchesTable.grantReadWriteData(this.refundWorkerFn);
+    mockPaymentSecret.grantRead(this.refundWorkerFn);
+    this.refundQueue.grantConsumeMessages(this.refundWorkerFn);
+
+    this.refundWorkerFn.addEventSource(
+      new sources.SqsEventSource(this.refundQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true,
       }),
     );
   }

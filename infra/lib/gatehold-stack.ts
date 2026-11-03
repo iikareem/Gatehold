@@ -89,13 +89,15 @@ export class GateholdStack extends cdk.Stack {
       ordersTable: data.ordersTable,
     });
 
-    // Phase 11c — Events stream → refund orchestrator → refunds SQS (+ DLQ).
+    // Phase 11c/d — Events stream → orchestrator → refunds SQS → refund-worker.
     const cancelRefund = new CancelRefund(this, "CancelRefund", {
       stage,
       removalPolicy,
       eventsTable: data.eventsTable,
       ordersTable: data.ordersTable,
+      ledgerTable: data.ledgerTable,
       refundBatchesTable: data.refundBatchesTable,
+      mockPaymentSecret: config.mockPaymentSecret,
     });
 
     addGateholdOutputs(this, {

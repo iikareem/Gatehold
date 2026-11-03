@@ -74,6 +74,7 @@ export class GateholdStack extends cdk.Stack {
       stage,
       eventsTable: data.eventsTable,
       seatsTable: data.seatsTable,
+      refundBatchesTable: data.refundBatchesTable,
       holdSeatFn: holds.holdSeatFn,
       createOrderFn: orders.createOrderFn,
       getOrderFn: orders.getOrderFn,

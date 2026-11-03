@@ -18,6 +18,8 @@ export interface HttpApiProps {
   stage: string;
   eventsTable: dynamodb.ITable;
   seatsTable: dynamodb.ITable;
+  /** Phase 11e — GET /admin/events/{eventId}/refunds. */
+  refundBatchesTable: dynamodb.ITable;
   holdSeatFn: lambda.IFunction;
   createOrderFn: lambda.IFunction;
   /** Phase 10c — GET /orders/{orderId} (owner + ticket presign). */
@@ -56,6 +58,7 @@ export class HttpApi extends Construct {
       stage,
       eventsTable,
       seatsTable,
+      refundBatchesTable,
       holdSeatFn,
       createOrderFn,
       getOrderFn,
@@ -144,8 +147,21 @@ export class HttpApi extends Construct {
       stage,
       name: "refunds",
       entry: path.join(projectRoot, "services/refunds/src/handler.ts"),
-      environment: { STAGE: stage },
+      environment: {
+        STAGE: stage,
+        EVENTS_TABLE_NAME: eventsTable.tableName,
+        REFUND_BATCHES_TABLE_NAME: refundBatchesTable.tableName,
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
     });
+    eventsTable.grantReadData(this.refundsFn);
+    refundBatchesTable.grantReadData(this.refundsFn);
 
     this.api = new apigateway.RestApi(this, "GateholdApi", {
       restApiName: `gatehold-${stage}`,
@@ -233,7 +249,7 @@ export class HttpApi extends Construct {
         new apigateway.LambdaIntegration(this.verifyTicketFn),
       );
 
-    // /admin/* (9c) — JWT + admin group at the edge; cancel/refund stubs until Phase 11
+    // /admin/* (9c) — JWT + admin group; cancel (11b) + refunds status (11e)
     const adminRoot = this.api.root.addResource("admin");
     const adminEvents = adminRoot.addResource("events");
     const adminEvent = adminEvents.addResource("{eventId}");

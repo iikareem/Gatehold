@@ -889,6 +889,37 @@ Update event
 
 Selling paths already require event `ON_SALE` (create-order ConditionCheck, VerifyHold). New holds should likewise reject when not on sale (Slice 11b).
 
+### Refund status — `GET /admin/events/{eventId}/refunds`
+
+**Auth:** same admin authorizer as cancel.
+
+**Missing event — `404`.**
+
+**No batch yet — `200`:**
+
+```json
+{ "eventId": "evt_001", "eventStatus": "CANCELLING", "batch": null }
+```
+
+**With batch — `200`:**
+
+```json
+{
+  "eventId": "evt_001",
+  "eventStatus": "CANCELLING",
+  "batchId": "rb_…",
+  "status": "RUNNING",
+  "enqueued": 3120,
+  "succeeded": 2840,
+  "failed": 12,
+  "fanOutComplete": true,
+  "startedAt": "2026-11-01T00:00:00.000Z",
+  "finishedAt": null
+}
+```
+
+Loads `event.refundBatchId` then the RefundBatch item (counters + status).
+
 ### RefundBatches table
 
 Table name: `gatehold-{stage}-refund-batches`

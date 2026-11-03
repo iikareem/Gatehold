@@ -38,7 +38,7 @@ only when the helper is too wide or missing an action the call graph needs.
 | **admin-authorizer** | (JWT verify in-process — no AWS data plane grants) |
 | **cancel** | DynamoDB **W** events (`ON_SALE → CANCELLING`) |
 | **refund-worker** | DynamoDB **RW** orders · ledger · refund-batches · events (`CANCELLED` on drain) · Secrets Manager mock-payment · SQS consume refunds |
-| **refunds (GET)** | stub `501` until admin status slice — no data-plane grants yet |
+| **refunds (GET)** | DynamoDB **R** events · refund-batches |
 
 ## 9d.4 changes (what got narrower)
 

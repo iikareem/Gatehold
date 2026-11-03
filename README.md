@@ -551,7 +551,18 @@ GET /admin/events/evt_001/refunds
 
 ```http
 HTTP/1.1 200 OK
-{ "batchId": "rb_01HDEF", "total": 3120, "succeeded": 2840, "failed": 12, "status": "RUNNING" }
+{
+  "eventId": "evt_001",
+  "eventStatus": "CANCELLING",
+  "batchId": "rb_01HDEF",
+  "status": "RUNNING",
+  "enqueued": 3120,
+  "succeeded": 2840,
+  "failed": 12,
+  "fanOutComplete": true,
+  "startedAt": "2026-11-01T00:00:00.000Z",
+  "finishedAt": null
+}
 ```
 
 ---

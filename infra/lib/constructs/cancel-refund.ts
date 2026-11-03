@@ -29,6 +29,7 @@ export interface CancelRefundProps {
  *
  * 11c: Events stream → Go refund-orchestrator → RefundBatch + SQS refunds (+ DLQ).
  * 11d: SQS → TS refund-worker → provider refund + ledger + order REFUNDED.
+ * 11e (partial): after counter bump, drain check → batch COMPLETE* + event CANCELLED.
  */
 export class CancelRefund extends Construct {
   readonly refundDlq: sqs.Queue;
@@ -118,6 +119,7 @@ export class CancelRefund extends Construct {
         ORDERS_TABLE_NAME: ordersTable.tableName,
         LEDGER_TABLE_NAME: ledgerTable.tableName,
         REFUND_BATCHES_TABLE_NAME: refundBatchesTable.tableName,
+        EVENTS_TABLE_NAME: eventsTable.tableName,
         MOCK_PAYMENT_SECRET_ARN: mockPaymentSecret.secretArn,
         ...(process.env.AWS_ENDPOINT_URL
           ? {
@@ -132,6 +134,7 @@ export class CancelRefund extends Construct {
     ordersTable.grantReadWriteData(this.refundWorkerFn);
     ledgerTable.grantReadWriteData(this.refundWorkerFn);
     refundBatchesTable.grantReadWriteData(this.refundWorkerFn);
+    eventsTable.grantReadWriteData(this.refundWorkerFn);
     mockPaymentSecret.grantRead(this.refundWorkerFn);
     this.refundQueue.grantConsumeMessages(this.refundWorkerFn);
 

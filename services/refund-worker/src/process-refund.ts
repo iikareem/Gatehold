@@ -12,6 +12,7 @@ import {
   paymentRefundKey,
   requireEnv,
   type LedgerItem,
+  type RefundBatchItem,
   type RefundQueueMessage,
 } from "../../shared/src";
 import {
@@ -20,11 +21,13 @@ import {
   refundWithProvider,
 } from "../../shared/src/payment";
 import { PermanentRefundError, TransientRefundError } from "./errors";
+import { tryCompleteRefundBatch } from "./try-complete-batch";
 
 export interface RefundJobTables {
   ordersTable: string;
   ledgerTable: string;
   refundBatchesTable: string;
+  eventsTable: string;
 }
 
 /**
@@ -89,15 +92,18 @@ export async function processRefundJob(
   });
 
   await completeOrder(tables.ordersTable, orderId);
-  await bumpBatchCounter(tables.refundBatchesTable, batchId, "succeeded");
+  await bumpCounterAndMaybeComplete(tables, batchId, "succeeded");
 }
 
 export async function recordPermanentFailure(
   batchId: string,
-  refundBatchesTable: string = requireEnv("REFUND_BATCHES_TABLE_NAME"),
+  tables: Pick<RefundJobTables, "refundBatchesTable" | "eventsTable"> = {
+    refundBatchesTable: requireEnv("REFUND_BATCHES_TABLE_NAME"),
+    eventsTable: requireEnv("EVENTS_TABLE_NAME"),
+  },
 ): Promise<void> {
   if (!batchId) return;
-  await bumpBatchCounter(refundBatchesTable, batchId, "failed");
+  await bumpCounterAndMaybeComplete(tables, batchId, "failed");
 }
 
 function tablesFromEnv(): RefundJobTables {
@@ -105,6 +111,7 @@ function tablesFromEnv(): RefundJobTables {
     ordersTable: requireEnv("ORDERS_TABLE_NAME"),
     ledgerTable: requireEnv("LEDGER_TABLE_NAME"),
     refundBatchesTable: requireEnv("REFUND_BATCHES_TABLE_NAME"),
+    eventsTable: requireEnv("EVENTS_TABLE_NAME"),
   };
 }
 
@@ -203,21 +210,38 @@ async function completeOrder(ordersTable: string, orderId: string): Promise<void
   }
 }
 
+async function bumpCounterAndMaybeComplete(
+  tables: Pick<RefundJobTables, "refundBatchesTable" | "eventsTable">,
+  batchId: string,
+  kind: "succeeded" | "failed",
+): Promise<void> {
+  const batch = await bumpBatchCounter(tables.refundBatchesTable, batchId, kind);
+  await tryCompleteRefundBatch(batch, tables);
+}
+
 async function bumpBatchCounter(
   refundBatchesTable: string,
   batchId: string,
   kind: "succeeded" | "failed",
-): Promise<void> {
+): Promise<RefundBatchItem> {
   try {
-    await getDocClient().send(
-      new UpdateCommand(
-        buildRefundBatchCounterUpdateInput({
+    const out = await getDocClient().send(
+      new UpdateCommand({
+        ...buildRefundBatchCounterUpdateInput({
           tableName: refundBatchesTable,
           batchId,
           kind,
         }),
-      ),
+        ReturnValues: "ALL_NEW",
+      }),
     );
+    const attrs = out.Attributes as RefundBatchItem | undefined;
+    if (!attrs?.batchId || !attrs.eventId) {
+      throw new PermanentRefundError(
+        `refund batch missing attributes after counter bump: ${batchId}`,
+      );
+    }
+    return attrs;
   } catch (err) {
     if (isConditionalCheckFailed(err)) {
       throw new PermanentRefundError(`refund batch not found: ${batchId}`);

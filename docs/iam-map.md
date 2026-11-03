@@ -37,7 +37,8 @@ only when the helper is too wide or missing an action the call graph needs.
 | **notify-email** | SES **SendEmail/SendRawEmail** on From identity `noreply@gatehold.local` · SES **VerifyEmailIdentity** `*` (sandbox From+To) · SQS consume notifications |
 | **admin-authorizer** | (JWT verify in-process — no AWS data plane grants) |
 | **cancel** | DynamoDB **W** events (`ON_SALE → CANCELLING`) |
-| **refunds (GET)** | stub `501` until 11e — no data-plane grants yet |
+| **refund-worker** | DynamoDB **RW** orders · ledger · refund-batches · events (`CANCELLED` on drain) · Secrets Manager mock-payment · SQS consume refunds |
+| **refunds (GET)** | stub `501` until admin status slice — no data-plane grants yet |
 
 ## 9d.4 changes (what got narrower)
 

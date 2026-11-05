@@ -23,6 +23,7 @@ export function buildCreateRefundBatchPutInput(
     succeeded: 0,
     failed: 0,
     startedAt,
+    lastFanOutAt: startedAt,
   };
 
   return {
@@ -56,21 +57,24 @@ export function buildRefundBatchCheckpointUpdateInput(
     throw new Error(`enqueuedDelta must be a non-negative integer (got ${enqueuedDelta})`);
   }
 
+  const lastFanOutAt = new Date().toISOString();
   const expressionValues: Record<string, unknown> = {
     ":enqueuedDelta": enqueuedDelta,
     ":running": "RUNNING",
+    ":lastFanOutAt": lastFanOutAt,
   };
 
   let updateExpression = "ADD enqueued :enqueuedDelta";
   if (lastEvaluatedKey === undefined) {
     // Counter-only bump (e.g. re-enqueue without cursor change).
+    updateExpression += " SET lastFanOutAt = :lastFanOutAt";
   } else if (lastEvaluatedKey === null) {
     updateExpression +=
-      " SET fanOutComplete = :fanOutComplete REMOVE lastEvaluatedKey";
+      " SET fanOutComplete = :fanOutComplete, lastFanOutAt = :lastFanOutAt REMOVE lastEvaluatedKey";
     expressionValues[":fanOutComplete"] = true;
   } else {
     updateExpression +=
-      " SET lastEvaluatedKey = :lek, fanOutComplete = :fanOutComplete";
+      " SET lastEvaluatedKey = :lek, fanOutComplete = :fanOutComplete, lastFanOutAt = :lastFanOutAt";
     expressionValues[":lek"] = lastEvaluatedKey;
     expressionValues[":fanOutComplete"] = false;
   }

@@ -434,7 +434,7 @@ Append-only entries (`AUTH`, `CAPTURE`, `VOID`, `REFUND`) with a conditional wri
 
 ### RefundBatches
 
-`batchId` (PK), `eventId`, `enqueued`, `succeeded`, `failed`, `status` (`RUNNING`, `COMPLETE`, `COMPLETE_WITH_FAILURES`), `startedAt`, `finishedAt`, optional `lastEvaluatedKey` / `fanOutComplete` (orchestrator checkpoint), optional `reportKey`. Counters use atomic `ADD`.
+`batchId` (PK), `eventId`, `enqueued`, `succeeded`, `failed`, `status` (`RUNNING`, `COMPLETE`, `COMPLETE_WITH_FAILURES`), `startedAt`, `finishedAt`, optional `lastEvaluatedKey` / `fanOutComplete` / `lastFanOutAt` (orchestrator checkpoint + sweeper), optional `reportKey`. Counters use atomic `ADD`.
 
 ### Idempotency
 
@@ -589,7 +589,7 @@ gatehold/
 ├── go/                       # Go components
 │   ├── mock-payment/         # configurable provider (latency, errors, duplicates, rate limit)
 │   ├── hold-sweeper/
-│   ├── refund-orchestrator/  # Phase 11c — Events stream → RefundBatch + SQS
+│   ├── refund-orchestrator/  # Phase 11c/11f1 — stream + sweeper → RefundBatch + SQS
 │   ├── reconciler/
 │   ├── stream-relay/
 │   ├── notify-email/

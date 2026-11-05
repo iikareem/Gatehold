@@ -209,7 +209,8 @@ export function addGateholdOutputs(
   });
   new cdk.CfnOutput(stack, "RefundOrchestratorFunctionName", {
     value: cancelRefund.refundOrchestratorFn.functionName,
-    description: "Phase 11c — Events stream → RefundBatch + SQS fan-out",
+    description:
+      "Phase 11c/11f1 — Events stream + scheduled sweeper → RefundBatch fan-out",
   });
   new cdk.CfnOutput(stack, "RefundWorkerFunctionName", {
     value: cancelRefund.refundWorkerFn.functionName,

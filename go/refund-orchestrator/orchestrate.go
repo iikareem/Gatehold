@@ -32,6 +32,7 @@ type dynamoAPI interface {
 	PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 	UpdateItem(ctx context.Context, params *dynamodb.UpdateItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error)
 	Query(ctx context.Context, params *dynamodb.QueryInput, optFns ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
+	Scan(ctx context.Context, params *dynamodb.ScanInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error)
 }
 
 type orchestratorDeps struct {
@@ -52,44 +53,43 @@ type refundBatchState struct {
 	LastEvaluatedKey map[string]types.AttributeValue
 }
 
-// HandleStream filters Events stream records and fans out refund jobs.
-func HandleStream(ctx context.Context, event events.DynamoDBEvent) error {
+func loadOrchestratorDeps(ctx context.Context) (orchestratorDeps, error) {
 	eventsTable, err := requireEnv("EVENTS_TABLE_NAME")
 	if err != nil {
-		return err
+		return orchestratorDeps{}, err
 	}
 	ordersTable, err := requireEnv("ORDERS_TABLE_NAME")
 	if err != nil {
-		return err
+		return orchestratorDeps{}, err
 	}
 	refundBatchesTbl, err := requireEnv("REFUND_BATCHES_TABLE_NAME")
 	if err != nil {
-		return err
+		return orchestratorDeps{}, err
 	}
 	queueURL, err := requireEnv("REFUND_QUEUE_URL")
 	if err != nil {
-		return err
+		return orchestratorDeps{}, err
 	}
 
 	ddb, err := newDynamoClient(ctx)
 	if err != nil {
-		return err
+		return orchestratorDeps{}, err
 	}
 	sqsClient, err := newSQSClient(ctx)
 	if err != nil {
-		return err
+		return orchestratorDeps{}, err
 	}
 
 	pageSize := defaultPageSize
 	if raw := envOr("ORDERS_PAGE_SIZE", ""); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 1 || n > 1000 {
-			return fmt.Errorf("invalid ORDERS_PAGE_SIZE %q", raw)
+			return orchestratorDeps{}, fmt.Errorf("invalid ORDERS_PAGE_SIZE %q", raw)
 		}
 		pageSize = int32(n)
 	}
 
-	deps := orchestratorDeps{
+	return orchestratorDeps{
 		dynamo:           ddb,
 		sqs:              sqsClient,
 		eventsTable:      eventsTable,
@@ -97,6 +97,14 @@ func HandleStream(ctx context.Context, event events.DynamoDBEvent) error {
 		refundBatchesTbl: refundBatchesTbl,
 		queueURL:         queueURL,
 		pageSize:         pageSize,
+	}, nil
+}
+
+// HandleStream filters Events stream records and fans out refund jobs.
+func HandleStream(ctx context.Context, event events.DynamoDBEvent) error {
+	deps, err := loadOrchestratorDeps(ctx)
+	if err != nil {
+		return err
 	}
 
 	for _, record := range event.Records {
@@ -203,13 +211,14 @@ func claimOrLoadBatch(ctx context.Context, deps orchestratorDeps, eventID string
 	_, err = deps.dynamo.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(deps.refundBatchesTbl),
 		Item: map[string]types.AttributeValue{
-			"batchId":   &types.AttributeValueMemberS{Value: batchID},
-			"eventId":   &types.AttributeValueMemberS{Value: eventID},
-			"status":    &types.AttributeValueMemberS{Value: "RUNNING"},
-			"enqueued":  &types.AttributeValueMemberN{Value: "0"},
-			"succeeded": &types.AttributeValueMemberN{Value: "0"},
-			"failed":    &types.AttributeValueMemberN{Value: "0"},
-			"startedAt": &types.AttributeValueMemberS{Value: startedAt},
+			"batchId":      &types.AttributeValueMemberS{Value: batchID},
+			"eventId":      &types.AttributeValueMemberS{Value: eventID},
+			"status":       &types.AttributeValueMemberS{Value: "RUNNING"},
+			"enqueued":     &types.AttributeValueMemberN{Value: "0"},
+			"succeeded":    &types.AttributeValueMemberN{Value: "0"},
+			"failed":       &types.AttributeValueMemberN{Value: "0"},
+			"startedAt":    &types.AttributeValueMemberS{Value: startedAt},
+			"lastFanOutAt": &types.AttributeValueMemberS{Value: startedAt},
 		},
 		ConditionExpression: aws.String("attribute_not_exists(batchId)"),
 	})
@@ -352,17 +361,19 @@ func checkpointBatch(
 	lastKey map[string]types.AttributeValue,
 	fanOutComplete bool,
 ) error {
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	exprValues := map[string]types.AttributeValue{
 		":enqueuedDelta": &types.AttributeValueMemberN{Value: strconv.Itoa(enqueuedDelta)},
 		":running":       &types.AttributeValueMemberS{Value: "RUNNING"},
+		":lastFanOutAt":  &types.AttributeValueMemberS{Value: now},
 	}
 
 	var updateExpr string
 	if fanOutComplete {
-		updateExpr = "ADD enqueued :enqueuedDelta SET fanOutComplete = :fanOutComplete REMOVE lastEvaluatedKey"
+		updateExpr = "ADD enqueued :enqueuedDelta SET fanOutComplete = :fanOutComplete, lastFanOutAt = :lastFanOutAt REMOVE lastEvaluatedKey"
 		exprValues[":fanOutComplete"] = &types.AttributeValueMemberBOOL{Value: true}
 	} else {
-		updateExpr = "ADD enqueued :enqueuedDelta SET lastEvaluatedKey = :lek, fanOutComplete = :fanOutComplete"
+		updateExpr = "ADD enqueued :enqueuedDelta SET lastEvaluatedKey = :lek, fanOutComplete = :fanOutComplete, lastFanOutAt = :lastFanOutAt"
 		exprValues[":lek"] = &types.AttributeValueMemberM{Value: lastKey}
 		exprValues[":fanOutComplete"] = &types.AttributeValueMemberBOOL{Value: false}
 	}

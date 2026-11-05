@@ -24,6 +24,7 @@ describe("buildCreateRefundBatchPutInput", () => {
       succeeded: 0,
       failed: 0,
       startedAt: "2026-11-01T20:00:00.000Z",
+      lastFanOutAt: "2026-11-01T20:00:00.000Z",
     });
   });
 });
@@ -39,9 +40,14 @@ describe("buildRefundBatchCheckpointUpdateInput", () => {
     });
     assert.match(input.UpdateExpression, /^ADD enqueued :enqueuedDelta/);
     assert.match(input.UpdateExpression, /lastEvaluatedKey = :lek/);
+    assert.match(input.UpdateExpression, /lastFanOutAt = :lastFanOutAt/);
     assert.equal(input.ExpressionAttributeValues[":enqueuedDelta"], 25);
     assert.deepEqual(input.ExpressionAttributeValues[":lek"], lek);
     assert.equal(input.ExpressionAttributeValues[":fanOutComplete"], false);
+    assert.equal(
+      typeof input.ExpressionAttributeValues[":lastFanOutAt"],
+      "string",
+    );
   });
 
   it("clears cursor and marks fanOutComplete when key is null", () => {
@@ -52,6 +58,7 @@ describe("buildRefundBatchCheckpointUpdateInput", () => {
       lastEvaluatedKey: null,
     });
     assert.match(input.UpdateExpression, /REMOVE lastEvaluatedKey/);
+    assert.match(input.UpdateExpression, /lastFanOutAt = :lastFanOutAt/);
     assert.equal(input.ExpressionAttributeValues[":fanOutComplete"], true);
   });
 

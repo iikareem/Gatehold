@@ -679,6 +679,46 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Status:** Done — Go orchestrator + queue/DLQ + CDK wiring.
 
+### Slice 11d — Refund worker
+
+**Goal:** Per-order refund from SQS with idempotent ledger + order `REFUNDED`.
+
+**Status:** Done — TS `refund-worker` + capped SQS source + unit tests.
+
+### Slice 11e — Drain completion + admin status
+
+**Goal:** When `fanOutComplete` and `enqueued == succeeded + failed`, close the batch and mark the event `CANCELLED`; expose progress via `GET /admin/events/{eventId}/refunds`.
+
+**Status:** Done — worker drain check + refunds status Lambda.
+
+### Slice 11f1 — Stuck fan-out sweeper
+
+**Goal:** If Go dies after stream retries are exhausted mid-pagination, a timer resumes fan-out from `lastEvaluatedKey`.
+
+**Build**
+
+- `lastFanOutAt` on create + checkpoint (orchestrator only)
+- Dual Lambda entry: DynamoDB stream **or** EventBridge Scheduler payload → `HandleSweep`
+- Scan stale `RUNNING` / incomplete fan-out batches; resume `fanOutEvent`
+- CDK schedule (e.g. every 5 minutes) + `FAN_OUT_STALE_AFTER_SECONDS`
+
+**Verify:** unit tests for `isFanOutStuck` + sweep resumes only stale batches
+
+**Status:** In progress — EventBridge schedule + `lastFanOutAt` + sweep path (check before 11f2).
+
+### Slice 11f2 — Refund DLQ alarm (+ proof)
+
+**Goal:** Know when poison refund messages land in the DLQ; keep redrive manual.
+
+**Build**
+
+- CloudWatch alarm on refund DLQ `ApproximateNumberOfMessagesVisible >= 1`
+- Unit coverage / docs for alarm + manual redrive
+
+**Verify:** synth exposes alarm
+
+**Status:** Stashed — restore after 11f1 EventBridge check (`11f2-dlq-alarm.stash.md` in agent store).
+
 ---
 
 ## Phase 12 — Reconciler and auditor

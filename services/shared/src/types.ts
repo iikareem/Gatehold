@@ -136,6 +136,11 @@ export interface RefundBatchItem {
   /** Opaque DynamoDB Query ExclusiveStartKey for orders GSI resume. */
   lastEvaluatedKey?: Record<string, unknown>;
   fanOutComplete?: boolean;
+  /**
+   * ISO-8601; last orchestrator fan-out page (create or checkpoint).
+   * Sweeper uses this (not worker counters) to detect stuck fan-out.
+   */
+  lastFanOutAt?: string;
   reportKey?: string;
 }
 

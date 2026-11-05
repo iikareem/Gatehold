@@ -3,8 +3,10 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as targets from "aws-cdk-lib/aws-scheduler-targets";
 import { Construct } from "constructs";
 import {
   createGoFn,
@@ -29,7 +31,8 @@ export interface CancelRefundProps {
  *
  * 11c: Events stream → Go refund-orchestrator → RefundBatch + SQS refunds (+ DLQ).
  * 11d: SQS → TS refund-worker → provider refund + ledger + order REFUNDED.
- * 11e (partial): after counter bump, drain check → batch COMPLETE* + event CANCELLED.
+ * 11e: drain check → batch COMPLETE* + event CANCELLED; GET /admin/.../refunds.
+ * 11f1: EventBridge Scheduler → same Go Lambda sweeps stale fan-outs (lastFanOutAt).
  */
 export class CancelRefund extends Construct {
   readonly refundDlq: sqs.Queue;
@@ -83,6 +86,8 @@ export class CancelRefund extends Construct {
         ORDERS_TABLE_NAME: ordersTable.tableName,
         REFUND_BATCHES_TABLE_NAME: refundBatchesTable.tableName,
         REFUND_QUEUE_URL: this.refundQueue.queueUrl,
+        // 11f1 — resume fan-out when lastFanOutAt is older than this.
+        FAN_OUT_STALE_AFTER_SECONDS: "300",
         ...(process.env.AWS_ENDPOINT_URL
           ? {
               AWS_ENDPOINT_URL: dockerReachableEndpoint(
@@ -108,6 +113,14 @@ export class CancelRefund extends Construct {
         reportBatchItemFailures: false,
       }),
     );
+
+    // 11f1 — timer wake-up for stuck RUNNING fan-outs (same fanOutEvent path).
+    new scheduler.Schedule(this, "RefundFanOutSweeperSchedule", {
+      scheduleName: `gatehold-${stage}-refund-fanout-sweeper`,
+      description: "Resume stuck refund fan-outs (refund-orchestrator sweep)",
+      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
+      target: new targets.LambdaInvoke(this.refundOrchestratorFn),
+    });
 
     this.refundWorkerFn = createNodeFn(this, "RefundWorkerFn", {
       stage,

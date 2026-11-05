@@ -37,6 +37,7 @@ only when the helper is too wide or missing an action the call graph needs.
 | **notify-email** | SES **SendEmail/SendRawEmail** on From identity `noreply@gatehold.local` · SES **VerifyEmailIdentity** `*` (sandbox From+To) · SQS consume notifications |
 | **admin-authorizer** | (JWT verify in-process — no AWS data plane grants) |
 | **cancel** | DynamoDB **W** events (`ON_SALE → CANCELLING`) |
+| **refund-orchestrator** | DynamoDB **stream read** events · **RW** events · refund-batches · **R** orders · SQS send refunds (stream + scheduled sweeper) |
 | **refund-worker** | DynamoDB **RW** orders · ledger · refund-batches · events (`CANCELLED` on drain) · Secrets Manager mock-payment · SQS consume refunds |
 | **refunds (GET)** | DynamoDB **R** events · refund-batches |
 

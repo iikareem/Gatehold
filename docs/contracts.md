@@ -936,9 +936,12 @@ Table name: `gatehold-{stage}-refund-batches`
 | `finishedAt` | string | Optional; set when batch leaves `RUNNING` |
 | `lastEvaluatedKey` | map | Optional; opaque DynamoDB Query resume token for orders GSI paging |
 | `fanOutComplete` | boolean | Optional; `true` when Query returned no more `CONFIRMED` pages |
+| `lastFanOutAt` | string | ISO-8601; last orchestrator create/checkpoint (not worker counters) |
 | `reportKey` | string | Optional; S3 report object key (later) |
 
-**Checkpoint:** after each Query page, persist `lastEvaluatedKey` (and bump `enqueued`). Stream/Lambda retry or sweep reloads the batch and continues from that cursor. Idempotent batch create: reuse `event.refundBatchId` when present; otherwise Put batch + set `refundBatchId` on the event conditionally.
+**Checkpoint:** after each Query page, persist `lastEvaluatedKey` (and bump `enqueued` + `lastFanOutAt`). Stream/Lambda retry or scheduled sweeper reloads the batch and continues from that cursor. Idempotent batch create: reuse `event.refundBatchId` when present; otherwise Put batch + set `refundBatchId` on the event conditionally.
+
+**Sweeper (11f1):** EventBridge Scheduler invokes the same Go Lambda. Scan `RUNNING` batches with `fanOutComplete != true` whose `lastFanOutAt` (fallback `startedAt`) is older than `FAN_OUT_STALE_AFTER_SECONDS` (default 300), then call the same `fanOutEvent` resume path. Worker counter bumps do **not** refresh `lastFanOutAt`.
 
 ### Refund queue message
 

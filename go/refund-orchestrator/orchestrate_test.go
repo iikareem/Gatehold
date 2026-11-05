@@ -87,6 +87,8 @@ type mockDynamo struct {
 	updateCalls []dynamodb.UpdateItemInput
 	queryPages  []dynamodb.QueryOutput
 	queryIdx    int
+	scanPages   []dynamodb.ScanOutput
+	scanIdx     int
 }
 
 func (m *mockDynamo) GetItem(_ context.Context, params *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
@@ -113,6 +115,15 @@ func (m *mockDynamo) Query(_ context.Context, _ *dynamodb.QueryInput, _ ...func(
 	}
 	out := m.queryPages[m.queryIdx]
 	m.queryIdx++
+	return &out, nil
+}
+
+func (m *mockDynamo) Scan(_ context.Context, _ *dynamodb.ScanInput, _ ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error) {
+	if m.scanIdx >= len(m.scanPages) {
+		return &dynamodb.ScanOutput{}, nil
+	}
+	out := m.scanPages[m.scanIdx]
+	m.scanIdx++
 	return &out, nil
 }
 
@@ -195,11 +206,11 @@ func TestFanOutEvent_PagesAndCheckpoints(t *testing.T) {
 		t.Fatalf("expected 2 checkpoint updates, got %d", len(ddb.updateCalls))
 	}
 	first := aws.ToString(ddb.updateCalls[0].UpdateExpression)
-	if first != "ADD enqueued :enqueuedDelta SET lastEvaluatedKey = :lek, fanOutComplete = :fanOutComplete" {
+	if first != "ADD enqueued :enqueuedDelta SET lastEvaluatedKey = :lek, fanOutComplete = :fanOutComplete, lastFanOutAt = :lastFanOutAt" {
 		t.Fatalf("first checkpoint expr: %s", first)
 	}
 	second := aws.ToString(ddb.updateCalls[1].UpdateExpression)
-	if second != "ADD enqueued :enqueuedDelta SET fanOutComplete = :fanOutComplete REMOVE lastEvaluatedKey" {
+	if second != "ADD enqueued :enqueuedDelta SET fanOutComplete = :fanOutComplete, lastFanOutAt = :lastFanOutAt REMOVE lastEvaluatedKey" {
 		t.Fatalf("final checkpoint expr: %s", second)
 	}
 }

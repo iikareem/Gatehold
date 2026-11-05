@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as cdk from "aws-cdk-lib";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sources from "aws-cdk-lib/aws-lambda-event-sources";
@@ -33,12 +34,15 @@ export interface CancelRefundProps {
  * 11d: SQS → TS refund-worker → provider refund + ledger + order REFUNDED.
  * 11e: drain check → batch COMPLETE* + event CANCELLED; GET /admin/.../refunds.
  * 11f1: EventBridge Scheduler → same Go Lambda sweeps stale fan-outs (lastFanOutAt).
+ * 11f2: CloudWatch alarm when refund DLQ has visible messages (manual redrive).
  */
 export class CancelRefund extends Construct {
   readonly refundDlq: sqs.Queue;
   readonly refundQueue: sqs.Queue;
   readonly refundOrchestratorFn: lambda.IFunction;
   readonly refundWorkerFn: lambda.IFunction;
+  /** 11f2 — depth > 0 on refund DLQ (no auto-redrive). */
+  readonly refundDlqAlarm: cloudwatch.Alarm;
 
   constructor(scope: Construct, id: string, props: CancelRefundProps) {
     super(scope, id);
@@ -157,5 +161,21 @@ export class CancelRefund extends Construct {
         reportBatchItemFailures: true,
       }),
     );
+
+    // 11f2 — alert only; redrive stays manual.
+    this.refundDlqAlarm = new cloudwatch.Alarm(this, "RefundDlqDepthAlarm", {
+      alarmName: `gatehold-${stage}-refunds-dlq-depth`,
+      alarmDescription:
+        "Refund DLQ has visible messages — inspect and redrive manually",
+      metric: this.refundDlq.metricApproximateNumberOfMessagesVisible({
+        period: cdk.Duration.minutes(1),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
   }
 }

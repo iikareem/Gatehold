@@ -704,7 +704,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** unit tests for `isFanOutStuck` + sweep resumes only stale batches
 
-**Status:** In progress — EventBridge schedule + `lastFanOutAt` + sweep path (check before 11f2).
+**Status:** Done — EventBridge schedule + `lastFanOutAt` + sweep path.
 
 ### Slice 11f2 — Refund DLQ alarm (+ proof)
 
@@ -713,11 +713,11 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 **Build**
 
 - CloudWatch alarm on refund DLQ `ApproximateNumberOfMessagesVisible >= 1`
-- Unit coverage / docs for alarm + manual redrive
+- Stack output `RefundDlqAlarmName`; redrive stays manual
 
 **Verify:** synth exposes alarm
 
-**Status:** Stashed — restore after 11f1 EventBridge check (`11f2-dlq-alarm.stash.md` in agent store).
+**Status:** Done — DLQ depth alarm (no auto-redrive).
 
 ---
 

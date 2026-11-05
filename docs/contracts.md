@@ -943,6 +943,8 @@ Table name: `gatehold-{stage}-refund-batches`
 
 **Sweeper (11f1):** EventBridge Scheduler invokes the same Go Lambda. Scan `RUNNING` batches with `fanOutComplete != true` whose `lastFanOutAt` (fallback `startedAt`) is older than `FAN_OUT_STALE_AFTER_SECONDS` (default 300), then call the same `fanOutEvent` resume path. Worker counter bumps do **not** refresh `lastFanOutAt`.
 
+**DLQ alarm (11f2):** CloudWatch alarm when refund DLQ visible depth ≥ 1. Redrive is manual.
+
 ### Refund queue message
 
 Queue: `gatehold-{stage}-refunds` (+ DLQ). One message per paid order:

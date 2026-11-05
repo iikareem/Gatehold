@@ -216,4 +216,8 @@ export function addGateholdOutputs(
     value: cancelRefund.refundWorkerFn.functionName,
     description: "Phase 11d — SQS refunds → provider + ledger + REFUNDED",
   });
+  new cdk.CfnOutput(stack, "RefundDlqAlarmName", {
+    value: cancelRefund.refundDlqAlarm.alarmName,
+    description: "Phase 11f2 — alarm when refund DLQ has visible messages",
+  });
 }

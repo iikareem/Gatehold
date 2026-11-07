@@ -1,6 +1,7 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { TicketArtifact } from "./ticket";
+import { captureAwsV3Client } from "./xray";
 
 /** Default TTL for GET /orders/{orderId} ticket download links (Phase 10c). */
 export const DEFAULT_TICKET_DOWNLOAD_TTL_SECONDS = 900;
@@ -8,25 +9,28 @@ export const DEFAULT_TICKET_DOWNLOAD_TTL_SECONDS = 900;
 /**
  * S3 client that honors AWS_ENDPOINT_URL (MiniStack / local emulator).
  * forcePathStyle helps LocalStack-compatible hosts from Lambda containers.
+ * Phase 13c — X-Ray subsegments for ticket Put/Get.
  */
 export function createS3Client(): S3Client {
   const endpoint = process.env.AWS_ENDPOINT_URL;
   const region =
     process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
 
-  return new S3Client({
-    region,
-    forcePathStyle: Boolean(endpoint),
-    ...(endpoint
-      ? {
-          endpoint,
-          credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID || "test",
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test",
-          },
-        }
-      : {}),
-  });
+  return captureAwsV3Client(
+    new S3Client({
+      region,
+      forcePathStyle: Boolean(endpoint),
+      ...(endpoint
+        ? {
+            endpoint,
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID || "test",
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test",
+            },
+          }
+        : {}),
+    }),
+  );
 }
 
 let cachedClient: S3Client | undefined;

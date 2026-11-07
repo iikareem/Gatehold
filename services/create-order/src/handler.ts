@@ -10,6 +10,7 @@ import {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import {
+  annotateTrace,
   buildCreateOrderTransactWriteInput,
   callerUserId,
   DEFAULT_MAX_HOLD_SEATS,
@@ -94,6 +95,9 @@ export async function handler(
     }
     throw err;
   }
+
+  // Phase 13d — searchable purchase trace (no-op without an X-Ray segment).
+  annotateTrace({ orderId, holdId });
 
   const responseBody = { orderId, status: "PENDING" as const };
   const queueMessage: OrderQueueMessage = {

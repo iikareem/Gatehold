@@ -32,6 +32,7 @@ export {
 
 export { requireEnv, optionalEnv } from "./env";
 export { callerUserId, hasAdminGroup, ADMIN_GROUP_NAME } from "./auth";
+export { annotateTrace, captureAwsV3Client } from "./xray";
 export { createDynamoDBClient, getDocClient } from "./dynamodb";
 export { createSqsClient, getSqsClient } from "./sqs";
 export { createSfnClient, getSfnClient } from "./sfn";

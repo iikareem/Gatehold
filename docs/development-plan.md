@@ -894,7 +894,7 @@ Logs, EMF metrics, and alarms already exist from earlier phases (Lambda stdout, 
 
 **Verify:** unit test annotate does not throw without a segment; `npm test` green
 
-**Status:** Pending
+**Status:** Done — `aws-xray-sdk-core`, shared client capture, safe `annotateTrace`.
 
 ### Slice 13d — Annotate entry points + prove
 
@@ -907,7 +907,7 @@ Logs, EMF metrics, and alarms already exist from earlier phases (Lambda stdout, 
 
 **Verify:** existing handler tests still pass; real-AWS search finds the purchase (MiniStack incomplete OK)
 
-**Status:** Pending
+**Status:** Done — annotations on create-order + saga-starter; Phase 13 complete.
 
 ---
 
@@ -1021,8 +1021,8 @@ Copy into a notebook or tick in place:
 - [x] Phase 12e — EMF metric + CloudWatch alarm
 - [x] Phase 13a — Docs + slices (X-Ray plan)
 - [x] Phase 13b — CDK Active Tracing (Node + API + saga)
-- [ ] Phase 13c — Shared SDK wrap + annotate helper
-- [ ] Phase 13d — Annotate create-order + saga-starter
+- [x] Phase 13c — Shared SDK wrap + annotate helper
+- [x] Phase 13d — Annotate create-order + saga-starter
 - [ ] Phase 14 — WebSocket order-done notifications
 
 When you complete a phase, add a short note under README “What I Learned” the same day — future you will forget the bug that taught the lesson.

@@ -1,27 +1,31 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { captureAwsV3Client } from "./xray";
 
 /**
  * DynamoDB client that honors AWS_ENDPOINT_URL (MiniStack / local emulator).
  * On real AWS, leave AWS_ENDPOINT_URL unset.
+ * Phase 13c — X-Ray subsegments via captureAWSv3Client.
  */
 export function createDynamoDBClient(): DynamoDBClient {
   const endpoint = process.env.AWS_ENDPOINT_URL;
   const region =
     process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
 
-  return new DynamoDBClient({
-    region,
-    ...(endpoint
-      ? {
-          endpoint,
-          credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID || "test",
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test",
-          },
-        }
-      : {}),
-  });
+  return captureAwsV3Client(
+    new DynamoDBClient({
+      region,
+      ...(endpoint
+        ? {
+            endpoint,
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID || "test",
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test",
+            },
+          }
+        : {}),
+    }),
+  );
 }
 
 let cachedDocClient: DynamoDBDocumentClient | undefined;

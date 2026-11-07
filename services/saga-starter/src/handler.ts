@@ -4,7 +4,7 @@ import {
 } from "@aws-sdk/client-sfn";
 import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { SQSEvent, SQSBatchResponse, SQSRecord } from "aws-lambda";
-import { getDocClient, requireEnv } from "../../shared/src";
+import { annotateTrace, getDocClient, requireEnv } from "../../shared/src";
 import { getSfnClient } from "../../shared/src/sfn";
 import type { OrderQueueMessage } from "../../shared/src/types";
 
@@ -39,6 +39,8 @@ async function processRecord(
   ordersTable: string,
 ): Promise<void> {
   const message = parseOrderMessage(record.body);
+  // Phase 13d — searchable purchase trace (no-op without an X-Ray segment).
+  annotateTrace({ orderId: message.orderId, holdId: message.holdId });
   const input = JSON.stringify(message);
 
   let executionArn: string;

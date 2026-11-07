@@ -821,7 +821,7 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 10d: POST /tickets/verify (KMS Verify + event status)
 - [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
 - [x] Phase 12: Reconciler (detect-only: CONFIRMED without SOLD → CloudWatch; slices 12a–12e)
-- [ ] Phase 13: X-Ray tracing on the purchase path (orderId-searchable; slices 13a–13d)
+- [x] Phase 13: X-Ray tracing on the purchase path (orderId-searchable; slices 13a–13d)
 - [ ] Phase 14: WebSocket notify buyer when order is `CONFIRMED` / `FAILED`
 
 Possible extensions:

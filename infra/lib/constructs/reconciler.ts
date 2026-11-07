@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as cdk from "aws-cdk-lib";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
@@ -15,12 +16,13 @@ export interface ReconcilerProps {
 }
 
 /**
- * Phase 12d — detect-only reconciler: scheduled Go Lambda, read-only on
- * Events / Orders / Seats. Finds CONFIRMED orders whose seats are not SOLD.
- * Alarm / EMF land in slice 12e.
+ * Phase 12 — detect-only reconciler: scheduled Go Lambda, read-only on
+ * Events / Orders / Seats. Finds CONFIRMED orders whose seats are not SOLD;
+ * EMF + alarm surface ReconcilerInconsistencies (slice 12e).
  */
 export class Reconciler extends Construct {
   readonly reconcilerFn: lambda.IFunction;
+  readonly inconsistenciesAlarm: cloudwatch.Alarm;
 
   constructor(scope: Construct, id: string, props: ReconcilerProps) {
     super(scope, id);
@@ -53,5 +55,29 @@ export class Reconciler extends Construct {
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
       target: new targets.LambdaInvoke(this.reconcilerFn),
     });
+
+    // 12e — EMF → Gatehold/ReconcilerInconsistencies; alert when any finding.
+    this.inconsistenciesAlarm = new cloudwatch.Alarm(
+      this,
+      "ReconcilerInconsistenciesAlarm",
+      {
+        alarmName: `gatehold-${stage}-reconciler-inconsistencies`,
+        alarmDescription:
+          "Detect-only reconciler found CONFIRMED orders without matching SOLD seats",
+        metric: new cloudwatch.Metric({
+          namespace: "Gatehold",
+          metricName: "ReconcilerInconsistencies",
+          dimensionsMap: { stage },
+          statistic: "Sum",
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      },
+    );
   }
 }

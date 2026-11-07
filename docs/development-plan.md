@@ -820,7 +820,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** synth exposes alarm name; injected inconsistency produces EMF log line
 
-**Status:** Pending
+**Status:** Done — EMF end-of-run metrics + `ReconcilerInconsistenciesAlarm` + `ReconcilerAlarmName` output.
 
 ---
 
@@ -959,7 +959,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 12b — Go check core + unit tests
 - [x] Phase 12c — Go reconciler worker (read + logs)
 - [x] Phase 12d — CDK Lambda + Scheduler
-- [ ] Phase 12e — EMF metric + CloudWatch alarm
+- [x] Phase 12e — EMF metric + CloudWatch alarm
 - [ ] Phase 13 — Observability (CloudWatch + X-Ray)
 - [ ] Phase 14 — WebSocket order-done notifications
 

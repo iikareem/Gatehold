@@ -79,6 +79,8 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
+	emitEMF(stats)
+
 	log.Printf(
 		"reconciler done: eventsScanned=%d ordersChecked=%d inconsistencies=%d",
 		stats.EventsScanned, stats.OrdersChecked, stats.Inconsistencies,

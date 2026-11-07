@@ -228,4 +228,9 @@ export function addGateholdOutputs(
     description:
       "Phase 12d — scheduled detect-only reconciler (CONFIRMED without SOLD)",
   });
+  new cdk.CfnOutput(stack, "ReconcilerAlarmName", {
+    value: reconciler.inconsistenciesAlarm.alarmName,
+    description:
+      "Phase 12e — alarm when Gatehold/ReconcilerInconsistencies >= 1",
+  });
 }

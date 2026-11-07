@@ -381,4 +381,4 @@ Expect at least: `sub`, `cognito:username`, `iss` (matches `UserPoolIssuer`). Fo
 Do not expect these to work:
 
 - `groupSize` / server block search (optional; Phase 3 ships explicit `seatIds` only)
-- (Phase 11 complete for cancel / worker / status / sweeper / DLQ alarm — failure suite polish may still grow in Phase 14)
+- (Phase 11 complete for cancel / worker / status / sweeper / DLQ alarm — Phase 14 is WebSocket order-done notify, not a failure-suite expansion)

@@ -831,16 +831,17 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 10c: GET /orders/{orderId} + presigned ticket URLs
 - [x] Phase 10d: POST /tickets/verify (KMS Verify + event status)
 - [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
-- [ ] Phase 12: Reconciler + independent auditor
-- [ ] Phase 13: Dashboards, alarms, tracing
-- [ ] Phase 14: Failure suite, load test, results table, cost report
-- [ ] Phase 15: CI/CD, dev/prod stages (optional)
+- [ ] Phase 12: Reconciler (scheduled repair / alarm)
+- [ ] Phase 13: Observability — CloudWatch metrics/alarms/dashboard + X-Ray
+- [ ] Phase 14: WebSocket notify buyer when order is `CONFIRMED` / `FAILED`
 
 Possible extensions:
 
 - Waiting room and bot defenses
-- Live seat map over WebSockets
+- Live seat map over WebSockets (broadcast availability; Phase 14 is order-done only)
 - Seat map frontend on CloudFront and S3
+- Independent auditor CLI / loadgen + README results table
+- CI/CD and dev/prod stages
 - Postgres ledger for a relational comparison
 - Purchase analytics with Kinesis Firehose, S3, and Athena
 - Partial cancellation (refund selected ticket types only)

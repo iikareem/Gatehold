@@ -721,91 +721,85 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 ---
 
-## Phase 12 — Reconciler and auditor
+## Phase 12 — Reconciler
 
-**Goal:** Independent repair and verification.
+**Goal:** Independent repair when happy-path code leaves contradictory data.
 
 **Build**
 
 - `reconciler` (Go): find contradictions (e.g. `CONFIRMED` without `SOLD` seats, cancelled event with unrefunded paid order) and repair or flag
-- `auditor` (Go): read-only invariant checks after a run (oversell, double charge, double refund, partial groups)
-- Schedule reconciler; run auditor manually after load/failure tests
-- Document invariants in `contracts.md` or a short `docs/invariants.md` if the list grows
+- Package as a Go Lambda; EventBridge Scheduler invokes it on an interval (same pattern as hold sweeper)
+- Document the invariants it enforces in `contracts.md` or a short `docs/invariants.md` if the list grows
+- Alarm or structured log when a contradiction is found and cannot be auto-repaired
+
+**Out of scope**
+
+- Independent auditor CLI, loadgen, failure-suite expansion, CI/CD stages (dropped from this plan)
 
 **Learn**
 
-- Why the system should not grade its own homework
 - Reconciliation as a product feature, not a one-off script
+- Why scheduled repair complements saga compensation
 
 **Done when**
 
-- Injected inconsistency is fixed or alarmed by reconciler
-- Auditor exits non-zero on oversell / double refund
+- Injected inconsistency is fixed or alarmed by the reconciler
+- Scheduler invokes the reconciler without a manual `go run`
 
 ---
 
-## Phase 13 — Observability
+## Phase 13 — Observability (CloudWatch + X-Ray)
 
-**Goal:** See contention, saga health, and refund backpressure.
+**Goal:** See contention, saga health, refund backpressure, and one purchase as a distributed trace.
 
 **Build**
 
 - Structured JSON logs with `orderId` / `batchId` / `holdId`
 - Custom metrics: conditional check failures, transaction conflicts, saga failures, refund rate, DLQ depth
 - Alarms: DLQ non-empty, saga failure rate, refund batch stuck, API 5xx
-- X-Ray (or emulator-safe tracing notes) across API → SQS → saga
+- **AWS X-Ray** across the purchase path: API Gateway → order accept → SQS → saga Lambdas → DynamoDB (and note refund path where practical)
+- Annotate traces with `orderId` / `holdId` so a single purchase is searchable
+- One CloudWatch dashboard covering purchase + refund paths
+- Document MiniStack limits: full X-Ray demos on real AWS; emulator-safe notes if traces are incomplete locally
 
 **Learn**
 
 - Which metrics prove the guarantees (zeros that matter)
 - Alerting on symptoms (DLQ, stuck batch) not only on crashes
+- Distributed tracing for async hops (why logs alone are hard across SQS + Step Functions)
 
 **Done when**
 
-- One dashboard (CloudWatch or exported screenshots) covers purchase + refund paths
+- Dashboard (or exported screenshots) covers purchase + refund paths
 - You can point to the metric that would catch oversell pressure (conflict rate) and refund stall (queue age)
+- One end-to-end purchase shows up as a single X-Ray trace (on real AWS if MiniStack cannot)
 
 ---
 
-## Phase 14 — Failure suite, load test, results
+## Phase 14 — WebSocket order-done notifications
 
-**Goal:** Evidence for the README results table.
+**Goal:** Push a real-time notice to the buyer when their purchase finishes (`CONFIRMED` or `FAILED`) — no polling `GET /orders/{orderId}`.
 
 **Build**
 
-- Expand `tests/failure` for the scenarios in the README failure table (pick a prioritized subset first)
-- `loadgen` (Go): burst holds/orders including `group-share`
-- Run load on **real AWS** for published numbers; keep MiniStack for functional failure tests
-- Fill README results + cost per 1,000 purchases
-- Billing alarm before any sustained AWS run; destroy stacks after
+- API Gateway **WebSocket** API (`$connect` / `$disconnect` / `$default` or a small `subscribe` route)
+- Auth on connect (reuse Cognito JWT; store `connectionId` → `userId` in DynamoDB)
+- Client subscribes to an `orderId` it owns (reject other users’ orders)
+- On order terminal transition (`PENDING` → `CONFIRMED` or `FAILED`), fan a push to that user’s open connections (hook from Orders stream / existing `OrderConfirmed` path — keep one notifier Lambda)
+- Payload is small: `{ orderId, status, eventId }` (ticket URLs stay on `GET /orders/{orderId}`)
+- CDK construct for the WebSocket API + connections table + IAM; stack outputs for the `wss://` URL
 
 **Learn**
 
-- What actually breaks under contention
-- Difference between emulator correctness and cloud performance
+- WebSockets vs email/SNS for “your order is ready”
+- Connection lifecycle and fan-out without turning the seat map into a live broadcast product
 
 **Done when**
 
-- Auditor passes after a load run (or failures are explained and fixed)
-- Results table has measured values, not estimates
+- Browser or `wscat` client receives a message when the saga marks the order `CONFIRMED` (and on `FAILED`)
+- Another user cannot subscribe to someone else’s `orderId`
 
----
-
-## Phase 15 — CI/CD and environments (optional polish)
-
-**Goal:** Repeatable deploys for portfolio credibility.
-
-**Build**
-
-- CI: lint, unit tests, `go test -race`, cdk synth
-- `dev` / `prod` stages via CDK context
-- Optional canary or alias for critical Lambdas
-- Protect prod account with spend limits
-
-**Done when**
-
-- Main branch runs tests on every push
-- Deploy to `dev` is one documented command
+**Note:** This is **order-done notify only** — not a live seat-map WebSocket. Seat-map broadcast stays a possible extension.
 
 ---
 
@@ -820,7 +814,8 @@ Use these as “I can show this” moments while learning:
 | C | 4–6 | Full purchase with mock payment chaos; show compensation |
 | D | 7 | Stack is composed constructs; same purchase path still works |
 | E | 11 | Cancel mid-sale; refund batch completes; no double refunds |
-| F | 12–14 | Load run + auditor green; README results filled |
+| F | 12–13 | Reconciler repairs an injected contradiction; X-Ray + dashboard on a purchase |
+| G | 14 | WebSocket client gets `CONFIRMED` without polling |
 
 ---
 
@@ -846,13 +841,12 @@ Use these as “I can show this” moments while learning:
                                          │              └── 9d.1 Config → 9d.2 Secret → 9d.3 SSM → 9d.4 IAM
                                          ├── 10 Signed tickets
                                          └── 11 Cancel + refunds
-                                              └── 12 Reconciler + auditor
-                                                   └── 13 Observability
-                                                        └── 14 Load / failure / results
-                                                             └── 15 CI/CD (optional)
+                                              └── 12 Reconciler
+                                                   └── 13 Observability (CloudWatch + X-Ray)
+                                                        └── 14 WebSocket order-done notify
 ```
 
-**Phase 7 is required before Phase 8+** so new domains become constructs, not more paste. Phases 8–10 can overlap slightly after Phase 7, but **Phase 11 must not start** until capture + ledger + mock refunds work.
+**Phase 7 is required before Phase 8+** so new domains become constructs, not more paste. Phases 8–10 can overlap slightly after Phase 7, but **Phase 11 must not start** until capture + ledger + mock refunds work. **Phase 14** needs Orders stream / terminal order status (Phase 8+) and Cognito (Phase 9).
 
 ---
 
@@ -885,9 +879,8 @@ Copy into a notebook or tick in place:
 - [x] Phase 10c — GET order + presigned URLs
 - [x] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds
-- [ ] Phase 12 — Reconciler and auditor
-- [ ] Phase 13 — Observability
-- [ ] Phase 14 — Failure suite, load, results
-- [ ] Phase 15 — CI/CD (optional)
+- [ ] Phase 12 — Reconciler
+- [ ] Phase 13 — Observability (CloudWatch + X-Ray)
+- [ ] Phase 14 — WebSocket order-done notifications
 
 When you complete a phase, add a short note under README “What I Learned” the same day — future you will forget the bug that taught the lesson.

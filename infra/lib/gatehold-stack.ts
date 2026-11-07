@@ -9,6 +9,7 @@ import { HoldCapability } from "./constructs/hold-capability";
 import { HttpApi } from "./constructs/http-api";
 import { OrderAccept } from "./constructs/order-accept";
 import { PurchaseSaga } from "./constructs/purchase-saga";
+import { Reconciler } from "./constructs/reconciler";
 import { TicketStore } from "./constructs/ticket-store";
 import { addGateholdOutputs } from "./helpers/stack-outputs";
 
@@ -101,6 +102,14 @@ export class GateholdStack extends cdk.Stack {
       mockPaymentSecret: config.mockPaymentSecret,
     });
 
+    // Phase 12d — scheduled detect-only reconciler (read Events/Orders/Seats).
+    const reconciler = new Reconciler(this, "Reconciler", {
+      stage,
+      eventsTable: data.eventsTable,
+      ordersTable: data.ordersTable,
+      seatsTable: data.seatsTable,
+    });
+
     addGateholdOutputs(this, {
       data,
       config,
@@ -112,6 +121,7 @@ export class GateholdStack extends cdk.Stack {
       domainEvents,
       tickets,
       cancelRefund,
+      reconciler,
     });
   }
 }

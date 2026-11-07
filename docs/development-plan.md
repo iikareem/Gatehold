@@ -806,7 +806,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** `cdk synth` exposes function + schedule
 
-**Status:** Pending
+**Status:** Done — `Reconciler` construct + 5-minute Scheduler + read grants + `ReconcilerFunctionName` output.
 
 ### Slice 12e — EMF metric + CloudWatch alarm
 
@@ -958,7 +958,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 12a — Docs + invariant (detect-only)
 - [x] Phase 12b — Go check core + unit tests
 - [x] Phase 12c — Go reconciler worker (read + logs)
-- [ ] Phase 12d — CDK Lambda + Scheduler
+- [x] Phase 12d — CDK Lambda + Scheduler
 - [ ] Phase 12e — EMF metric + CloudWatch alarm
 - [ ] Phase 13 — Observability (CloudWatch + X-Ray)
 - [ ] Phase 14 — WebSocket order-done notifications

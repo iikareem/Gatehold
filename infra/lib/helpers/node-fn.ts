@@ -72,7 +72,7 @@ export interface CreateGoFnProps {
 /**
  * Gatehold Go Lambda defaults (PROVIDED_AL2023, bootstrap handler, zip asset).
  * Zip must already exist (`npm run build:hold-sweeper` / `build:stream-relay` /
- * `build:notify-email` / `build:refund-orchestrator`).
+ * `build:notify-email` / `build:refund-orchestrator` / `build:reconciler`).
  */
 export function createGoFn(
   scope: Construct,

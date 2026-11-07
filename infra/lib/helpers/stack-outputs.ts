@@ -8,6 +8,7 @@ import type { HoldCapability } from "../constructs/hold-capability";
 import type { HttpApi } from "../constructs/http-api";
 import type { OrderAccept } from "../constructs/order-accept";
 import type { PurchaseSaga } from "../constructs/purchase-saga";
+import type { Reconciler } from "../constructs/reconciler";
 import type { TicketStore } from "../constructs/ticket-store";
 
 /**
@@ -27,6 +28,7 @@ export function addGateholdOutputs(
     domainEvents: DomainEvents;
     tickets: TicketStore;
     cancelRefund: CancelRefund;
+    reconciler: Reconciler;
   },
 ): void {
   const {
@@ -40,6 +42,7 @@ export function addGateholdOutputs(
     domainEvents,
     tickets,
     cancelRefund,
+    reconciler,
   } = parts;
 
   new cdk.CfnOutput(stack, "ApiUrl", {
@@ -219,5 +222,10 @@ export function addGateholdOutputs(
   new cdk.CfnOutput(stack, "RefundDlqAlarmName", {
     value: cancelRefund.refundDlqAlarm.alarmName,
     description: "Phase 11f2 — alarm when refund DLQ has visible messages",
+  });
+  new cdk.CfnOutput(stack, "ReconcilerFunctionName", {
+    value: reconciler.reconcilerFn.functionName,
+    description:
+      "Phase 12d — scheduled detect-only reconciler (CONFIRMED without SOLD)",
   });
 }

@@ -824,31 +824,33 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 ---
 
-## Phase 13 — Observability (CloudWatch + X-Ray)
+## Phase 13 — Distributed tracing (X-Ray)
 
-**Goal:** See contention, saga health, refund backpressure, and one purchase as a distributed trace.
+**Goal:** See one purchase as a single distributed trace across async hops — the observability gap left after Phase 12.
+
+Logs, EMF metrics, and alarms already exist from earlier phases (Lambda stdout, reconciler EMF + alarm, refund DLQ alarm). This phase does **not** rebuild that surface; it adds tracing.
 
 **Build**
 
-- Structured JSON logs with `orderId` / `batchId` / `holdId`
-- Custom metrics: conditional check failures, transaction conflicts, saga failures, refund rate, DLQ depth
-- Alarms: DLQ non-empty, saga failure rate, refund batch stuck, API 5xx
-- **AWS X-Ray** across the purchase path: API Gateway → order accept → SQS → saga Lambdas → DynamoDB (and note refund path where practical)
-- Annotate traces with `orderId` / `holdId` so a single purchase is searchable
-- One CloudWatch dashboard covering purchase + refund paths
-- Document MiniStack limits: full X-Ray demos on real AWS; emulator-safe notes if traces are incomplete locally
+- Enable **AWS X-Ray** on the purchase path: API Gateway → order accept → SQS → Step Functions → saga Lambdas → DynamoDB
+- Annotate traces with `orderId` (and `holdId` where cheap) so one buy is searchable
+- Document MiniStack limits: full X-Ray demos on real AWS; note if local traces are incomplete
+
+**Out of scope**
+
+- New CloudWatch dashboards
+- Extra custom metrics / alarm suite (conflicts, saga failure rate, API 5xx, …)
+- Project-wide structured JSON log rewrite
+- Refund-path tracing beyond a short “where practical” note
 
 **Learn**
 
-- Which metrics prove the guarantees (zeros that matter)
-- Alerting on symptoms (DLQ, stuck batch) not only on crashes
-- Distributed tracing for async hops (why logs alone are hard across SQS + Step Functions)
+- Why logs alone are hard across SQS + Step Functions
+- Trace annotations for finding one `orderId`
 
 **Done when**
 
-- Dashboard (or exported screenshots) covers purchase + refund paths
-- You can point to the metric that would catch oversell pressure (conflict rate) and refund stall (queue age)
-- One end-to-end purchase shows up as a single X-Ray trace (on real AWS if MiniStack cannot)
+- One end-to-end purchase shows up as a searchable X-Ray trace (on real AWS if MiniStack cannot)
 
 ---
 
@@ -890,7 +892,7 @@ Use these as “I can show this” moments while learning:
 | C | 4–6 | Full purchase with mock payment chaos; show compensation |
 | D | 7 | Stack is composed constructs; same purchase path still works |
 | E | 11 | Cancel mid-sale; refund batch completes; no double refunds |
-| F | 12–13 | Reconciler repairs an injected contradiction; X-Ray + dashboard on a purchase |
+| F | 12–13 | Reconciler alarms on injected CONFIRMED≠SOLD; one purchase visible in X-Ray |
 | G | 14 | WebSocket client gets `CONFIRMED` without polling |
 
 ---
@@ -918,7 +920,7 @@ Use these as “I can show this” moments while learning:
                                          ├── 10 Signed tickets
                                          └── 11 Cancel + refunds
                                               └── 12 Reconciler
-                                                   └── 13 Observability (CloudWatch + X-Ray)
+                                                   └── 13 X-Ray (purchase-path tracing)
                                                         └── 14 WebSocket order-done notify
 ```
 
@@ -960,7 +962,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 12c — Go reconciler worker (read + logs)
 - [x] Phase 12d — CDK Lambda + Scheduler
 - [x] Phase 12e — EMF metric + CloudWatch alarm
-- [ ] Phase 13 — Observability (CloudWatch + X-Ray)
+- [ ] Phase 13 — Distributed tracing (X-Ray)
 - [ ] Phase 14 — WebSocket order-done notifications
 
 When you complete a phase, add a short note under README “What I Learned” the same day — future you will forget the bug that taught the lesson.

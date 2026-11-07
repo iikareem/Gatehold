@@ -749,29 +749,18 @@ Bottlenecks and fixes will be documented after load testing.
 
 ## Observability
 
-Metrics:
+Already in place from earlier phases:
 
-- Orders accepted, confirmed, failed, refunded
-- Conditional check failures (contention)
-- Transaction cancellations and conflicts for group holds
-- SQS queue age and DLQ depth
-- Saga duration and failure rate
-- Reconciliation fixes
-- Refund queue backlog, refund rate, provider throttles, batch progress
+- Lambda / worker logs (stdout → CloudWatch Logs)
+- Reconciler EMF metric + alarm (`ReconcilerInconsistencies`)
+- Refund DLQ depth alarm
 
-Alarms:
+Phase 13 focus:
 
-- DLQ not empty (purchase or refund queue)
-- Queue age too high
-- Saga failure rate above threshold
-- API 5xx rate
-- Lambda throttles and DynamoDB throttled requests
-- Refund batch not progressing
+- X-Ray across the purchase path (API → SQS → Step Functions → saga Lambdas)
+- Trace annotations with `orderId` so one purchase is searchable
 
-Tracing and logs:
-
-- X-Ray across API, SQS, Step Functions, and Lambda
-- Structured JSON logs with order ID and batch ID as correlation IDs
+Richer dashboards and extra custom metrics/alarms stay possible extensions.
 
 ---
 
@@ -832,7 +821,7 @@ Summary (details, “done when”, and what not to skip are in the plan):
 - [x] Phase 10d: POST /tickets/verify (KMS Verify + event status)
 - [ ] Phase 11: Event cancellation, refund orchestrator/workers, batch tracking
 - [x] Phase 12: Reconciler (detect-only: CONFIRMED without SOLD → CloudWatch; slices 12a–12e)
-- [ ] Phase 13: Observability — CloudWatch metrics/alarms/dashboard + X-Ray
+- [ ] Phase 13: X-Ray tracing on the purchase path (orderId-searchable)
 - [ ] Phase 14: WebSocket notify buyer when order is `CONFIRMED` / `FAILED`
 
 Possible extensions:
@@ -842,6 +831,7 @@ Possible extensions:
 - Seat map frontend on CloudFront and S3
 - Independent auditor CLI / loadgen + README results table
 - CI/CD and dev/prod stages
+- CloudWatch dashboard + richer custom metrics/alarms (beyond Phase 12 + DLQ)
 - Postgres ledger for a relational comparison
 - Purchase analytics with Kinesis Firehose, S3, and Athena
 - Partial cancellation (refund selected ticket types only)

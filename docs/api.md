@@ -1,8 +1,8 @@
 # API — local testing cheat sheet
 
-Endpoints implemented so far (Phase 0–4: holds + orders). Use this to hit MiniStack **one call at a time**.
+Endpoints implemented so far (catalog reads + holds + orders). Use this to hit MiniStack **one call at a time**.
 
-**Postman:** import both JSON files under [`../postman/`](../postman/) — folders Health / Holds / Orders; variants live under **Examples**. Steps in [`../postman/README.md`](../postman/README.md).
+**Postman:** import both JSON files under [`../postman/`](../postman/) — folders Health / Catalog / Holds / Orders; variants live under **Examples**. Steps in [`../postman/README.md`](../postman/README.md).
 
 Contracts / shapes: [`contracts.md`](./contracts.md). Ops / deploy: [`runbook.md`](./runbook.md).
 
@@ -91,7 +91,78 @@ curl -sS "$BASE/health?eventId=evt_001&seatId=Z-99-99" | jq .
 
 ---
 
-## 3. Hold — single seat (happy path)
+## 3. Catalog — list events (public)
+
+```http
+GET /events
+```
+
+```bash
+curl -sS "$BASE/events" | jq .
+```
+
+**Expect `200`:**
+
+```json
+{
+  "events": [
+    {
+      "eventId": "evt_001",
+      "name": "Gatehold Demo Night",
+      "status": "ON_SALE",
+      "createdAt": "…"
+    }
+  ],
+  "nextToken": null
+}
+```
+
+---
+
+## 4. Catalog — get event (public)
+
+```http
+GET /events/{eventId}
+```
+
+```bash
+curl -sS "$BASE/events/evt_001" | jq .
+```
+
+**Expect `200`:**
+
+```json
+{
+  "eventId": "evt_001",
+  "name": "Gatehold Demo Night",
+  "status": "ON_SALE",
+  "createdAt": "…"
+}
+```
+
+**Expect `404`** if the event does not exist.
+
+---
+
+## 5. Catalog — list seats (public)
+
+```http
+GET /events/{eventId}/seats?limit=100
+```
+
+```bash
+curl -sS "$BASE/events/evt_001/seats" | jq .
+# next page (when nextToken is non-null):
+# curl -sS "$BASE/events/evt_001/seats?limit=25&nextToken=$TOKEN" | jq .
+```
+
+**Expect `200`** with public seat rows (`seatId`, `section`, `row`, `status`, optional `expiresAt`) and `nextToken` (`null` when done). Seed returns 50 seats in one page at default `limit=100`.
+
+**Expect `404`** if the event does not exist.
+
+---
+
+## 6. Hold — single seat (happy path)
 
 ```http
 POST /events/{eventId}/holds
@@ -125,7 +196,7 @@ curl -sS "$BASE/health?eventId=evt_001&seatId=A-12-07" | jq .
 
 ---
 
-## 4. Hold — conflict (already held)
+## 7. Hold — conflict (already held)
 
 Same seat, different user (hold still live):
 
@@ -148,7 +219,7 @@ curl -sS -X POST "$BASE/events/evt_001/holds" \
 
 ---
 
-## 5. Hold — group (multi-seat)
+## 8. Hold — group (multi-seat)
 
 ```bash
 curl -sS -X POST "$BASE/events/evt_001/holds" \
@@ -172,7 +243,7 @@ curl -sS -X POST "$BASE/events/evt_001/holds" \
 
 ---
 
-## 6. Hold — bad request
+## 9. Hold — bad request
 
 ```bash
 # empty seatIds
@@ -190,7 +261,7 @@ curl -sS -X POST "$BASE/events/evt_001/holds" \
 
 ---
 
-## 7. Hold — reclaim expired seat (optional)
+## 10. Hold — reclaim expired seat (optional)
 
 If you manually set a seat’s `expiresAt` to the past in StackPort / SDK while keeping `status=HELD`, a new hold should succeed (`201`). Live holds still return `409`.
 
@@ -198,7 +269,7 @@ Hold length: **5 minutes**. Waiting that long also works; no sweeper required fo
 
 ---
 
-## 8. Order — accept hold (`202`)
+## 11. Order — accept hold (`202`)
 
 Use a **fresh** hold (new seat or after reset). Capture `holdId` / `seatIds` from the hold response.
 
@@ -251,7 +322,7 @@ curl -sS http://localhost:4566/_ministack/sqs/messages | jq .
 
 ---
 
-## 9. Order — same Idempotency-Key (no second order)
+## 12. Order — same Idempotency-Key (no second order)
 
 ```bash
 curl -sS -X POST "$BASE/orders" \
@@ -265,7 +336,7 @@ curl -sS -X POST "$BASE/orders" \
 
 ---
 
-## 10. Order — missing key / foreign hold
+## 13. Order — missing key / foreign hold
 
 ```bash
 # missing Idempotency-Key → 400
@@ -290,15 +361,18 @@ curl -sS -X POST "$BASE/orders" \
 |---|---|---|
 | 1 | `GET /health` | `ok: true` |
 | 2 | `GET /health?eventId&seatId` | seat JSON |
-| 3 | `POST .../holds` (alice, free seat) | `201` |
-| 4 | Same seat again (bob) | `409` |
-| 5 | Group hold (2 seats) | `201` |
-| 6 | Overlapping group | `409` |
-| 7 | Bad body (empty / >8) | `400` |
-| 8 | Re-check seat via health | `HELD` |
-| 9 | `POST /orders` (alice + Idempotency-Key) | `202`, seat `PAYING` |
-| 10 | Same `Idempotency-Key` again | same `orderId` |
-| 11 | Inspect SQS (`/_ministack/sqs/messages`) | order message present |
+| 3 | `GET /events` | seeded `evt_001` in `events[]` |
+| 4 | `GET /events/evt_001` | event name + `ON_SALE` |
+| 5 | `GET /events/evt_001/seats` | 50 public seats, `nextToken: null` |
+| 6 | `POST .../holds` (alice, free seat) | `201` |
+| 7 | Same seat again (bob) | `409` |
+| 8 | Group hold (2 seats) | `201` |
+| 9 | Overlapping group | `409` |
+| 10 | Bad body (empty / >8) | `400` |
+| 11 | Re-check seat via health / seats | `HELD` |
+| 12 | `POST /orders` (alice + Idempotency-Key) | `202`, seat `PAYING` |
+| 13 | Same `Idempotency-Key` again | same `orderId` |
+| 14 | Inspect SQS (`/_ministack/sqs/messages`) | order message present |
 
 ---
 

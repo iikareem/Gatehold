@@ -35,15 +35,21 @@ export interface HttpApiProps {
 }
 
 /**
- * HTTP edge: health Lambda + RestApi routes for health, holds, orders, admin.
+ * HTTP edge: health + catalog (event/seats) + RestApi routes for holds, orders, admin.
  *
  * Holds/orders: Cognito JWT authorizer (any signed-in user).
  * Admin routes: TOKEN Lambda authorizer (JWT + `admin` group) — deny before stubs.
- * Health + ticket verify stay open (gate uses crypto, not fan JWT).
+ * Health, catalog GETs, and ticket verify stay open (browse / gate use no fan JWT).
  */
 export class HttpApi extends Construct {
   readonly api: apigateway.RestApi;
   readonly healthFn: lambda.IFunction;
+  /** Catalog — GET /events (public). */
+  readonly listEventsFn: lambda.IFunction;
+  /** Catalog — GET /events/{eventId} (public). */
+  readonly getEventFn: lambda.IFunction;
+  /** Catalog — GET /events/{eventId}/seats (public). */
+  readonly getSeatsFn: lambda.IFunction;
   readonly verifyTicketFn: lambda.IFunction;
   readonly cognitoAuthorizer: apigateway.CognitoUserPoolsAuthorizer;
   readonly adminAuthorizerFn: lambda.IFunction;
@@ -82,6 +88,52 @@ export class HttpApi extends Construct {
 
     // health only GetItem on seats (?eventId=&seatId=); events table unused.
     seatsTable.grantReadData(this.healthFn);
+
+    // Catalog reads (public) — seat-map frontend before login.
+    this.listEventsFn = createNodeFn(this, "ListEventsFn", {
+      stage,
+      name: "list-events",
+      entry: path.join(projectRoot, "services/list-events/src/handler.ts"),
+      environment: {
+        STAGE: stage,
+        EVENTS_TABLE_NAME: eventsTable.tableName,
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
+    });
+    eventsTable.grantReadData(this.listEventsFn);
+
+    this.getEventFn = createNodeFn(this, "GetEventFn", {
+      stage,
+      name: "get-event",
+      entry: path.join(projectRoot, "services/get-event/src/handler.ts"),
+      environment: {
+        STAGE: stage,
+        EVENTS_TABLE_NAME: eventsTable.tableName,
+        ...(process.env.AWS_ENDPOINT_URL
+          ? {
+              AWS_ENDPOINT_URL: dockerReachableEndpoint(
+                process.env.AWS_ENDPOINT_URL,
+              ),
+            }
+          : {}),
+      },
+    });
+    eventsTable.grantReadData(this.getEventFn);
+
+    this.getSeatsFn = createNodeFn(this, "GetSeatsFn", {
+      stage,
+      name: "get-seats",
+      entry: path.join(projectRoot, "services/get-seats/src/handler.ts"),
+      environment: lambdaEnv,
+    });
+    eventsTable.grantReadData(this.getSeatsFn);
+    seatsTable.grantReadData(this.getSeatsFn);
 
     // Phase 10d — simulated gate: KMS.Verify + event not CANCELLED.
     this.verifyTicketFn = createNodeFn(this, "VerifyTicketFn", {
@@ -220,9 +272,23 @@ export class HttpApi extends Construct {
       new apigateway.LambdaIntegration(this.healthFn),
     );
 
-    // POST /events/{eventId}/holds → hold-seat Lambda (Cognito JWT required)
+    // Catalog (public) + POST /events/{eventId}/holds (Cognito JWT)
     const events = this.api.root.addResource("events");
+    events.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(this.listEventsFn),
+    );
     const eventById = events.addResource("{eventId}");
+    eventById.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(this.getEventFn),
+    );
+    eventById
+      .addResource("seats")
+      .addMethod(
+        "GET",
+        new apigateway.LambdaIntegration(this.getSeatsFn),
+      );
     const holds = eventById.addResource("holds");
     holds.addMethod(
       "POST",

@@ -58,6 +58,91 @@ CONFIRMED → REFUND_PENDING → REFUNDED   (event cancel / mass refund)
 - Phase 6+: `gatehold-{stage}-ledger`
 - Phase 11+: `gatehold-{stage}-refund-batches`
 
+## Catalog reads (frontend)
+
+Public (no Cognito). Seat-map browse before login; hold/order stay authenticated.
+
+### List events — `GET /events`
+
+Query params (optional):
+
+| Param | Default | Notes |
+|---|---|---|
+| `limit` | `50` | Cap **100**. Invalid / out of range → `400`. |
+| `nextToken` | — | Opaque base64 of DynamoDB `LastEvaluatedKey`. Bad token → `400`. |
+
+**Success — `200`:**
+
+```json
+{
+  "events": [
+    {
+      "eventId": "evt_001",
+      "name": "Gatehold Demo Night",
+      "status": "ON_SALE",
+      "createdAt": "2026-11-01T20:00:00.000Z"
+    }
+  ],
+  "nextToken": null
+}
+```
+
+- Same public fields as get-event (`cancelledAt` only when set; no `refundBatchId`).
+- Implemented as a DynamoDB `Scan` (Events table is PK-only). Fine at portfolio scale.
+
+**Bad request — `400`:** bad `limit` or bad `nextToken`.
+
+### Get event — `GET /events/{eventId}`
+
+**Success — `200`:**
+
+```json
+{
+  "eventId": "evt_001",
+  "name": "Gatehold Demo Night",
+  "status": "ON_SALE",
+  "createdAt": "2026-11-01T20:00:00.000Z"
+}
+```
+
+- Include `cancelledAt` only when set.
+- Omit internal fields (`refundBatchId`).
+
+**Not found — `404`:** `{ "message": "event not found", "eventId": "…" }`
+
+**Bad request — `400`:** missing `eventId` path parameter.
+
+### List seats — `GET /events/{eventId}/seats`
+
+Query params (optional):
+
+| Param | Default | Notes |
+|---|---|---|
+| `limit` | `100` | Cap **200**. Invalid / out of range → `400`. |
+| `nextToken` | — | Opaque base64 of DynamoDB `LastEvaluatedKey`. Bad token → `400`. |
+
+**Success — `200`:**
+
+```json
+{
+  "eventId": "evt_001",
+  "seats": [
+    { "seatId": "A-12-01", "section": "A", "row": "12", "status": "AVAILABLE" },
+    { "seatId": "A-12-07", "section": "A", "row": "12", "status": "HELD", "expiresAt": "2026-11-01T20:05:00.000Z" }
+  ],
+  "nextToken": null
+}
+```
+
+- Public projection only: `seatId`, `section`, `row`, `status`, optional `expiresAt` when present.
+- Never return `holdId`, `holdOwner`, `orderId`, `payUntil`, `version`.
+- `nextToken` is a string when more pages remain; otherwise `null`.
+- Event must exist (`GetItem` on Events) before `Query` on Seats PK `eventId`.
+
+**Not found — `404`:** event missing → `{ "message": "event not found", "eventId": "…" }`
+
+**Bad request — `400`:** missing `eventId`, bad `limit`, or bad `nextToken`.
+
 ## Phase 1 / 3 — Hold seats (`POST /events/{eventId}/holds`)
 
 **Auth:** Cognito JWT authorizer; `userId` / `holdOwner` = `callerUserId` → claims `sub`. Never trust a `userId` from the body.

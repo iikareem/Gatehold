@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Gatehold (local MiniStack)",
-    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Auth, Health, Holds, Orders, Tickets, Admin (9c), Saga logs, Domain events, Mock payment.\\n\\nAuth: seed:auth then Login as alice|admin → saves idToken / aliceIdToken / adminIdToken.\\nHolds/Orders: Authorization Bearer {{idToken}}.\\nTickets: POST /tickets/verify is open (no JWT) — Download artifact then Verify.\\nAdmin: fan JWT → 403; admin JWT → 501 (stubs until Phase 11).",
+    "description": "Import with Gatehold.postman_environment.json.\\nSelect Gatehold MiniStack → Desktop Agent.\\n\\nFolders: Auth, Health, Catalog, Holds, Orders, Tickets, Admin (9c), Saga logs, Domain events, Mock payment.\\n\\nAuth: seed:auth then Login as alice|admin → saves idToken / aliceIdToken / adminIdToken.\\nCatalog: GET events + event + seats (public, no JWT).\\nHolds/Orders: Authorization Bearer {{idToken}}.\\nTickets: POST /tickets/verify is open (no JWT) — Download artifact then Verify.\\nAdmin: fan JWT → 403; admin JWT → cancel/refunds.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -319,6 +319,165 @@
                 }
               ],
               "body": "{\n  \"ok\": false,\n  \"message\": \"seat not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "description": "Public seat-map reads (no JWT). Prereq: deploy + seed.",
+      "item": [
+        {
+          "name": "List events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBase}}/events?limit=50",
+              "host": ["{{gatewayBase}}"],
+              "path": ["events"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "nextToken",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /events — list events for the landing page (public)."
+          },
+          "response": [
+            {
+              "name": "200 events",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/events"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"events\": [\n    {\n      \"eventId\": \"evt_001\",\n      \"name\": \"Gatehold Demo Night\",\n      \"status\": \"ON_SALE\",\n      \"createdAt\": \"…\"\n    }\n  ],\n  \"nextToken\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get event",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gatewayBase}}/events/{{eventId}}",
+            "description": "GET /events/{eventId} — name + status (public)."
+          },
+          "response": [
+            {
+              "name": "200 ON_SALE",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/events/{{eventId}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"eventId\": \"evt_001\",\n  \"name\": \"Gatehold Demo Night\",\n  \"status\": \"ON_SALE\",\n  \"createdAt\": \"…\"\n}"
+            },
+            {
+              "name": "404 missing",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/events/evt_missing"
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"event not found\",\n  \"eventId\": \"evt_missing\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List seats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBase}}/events/{{eventId}}/seats?limit=100",
+              "host": ["{{gatewayBase}}"],
+              "path": ["events", "{{eventId}}", "seats"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "nextToken",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /events/{eventId}/seats — public seat map (paginated)."
+          },
+          "response": [
+            {
+              "name": "200 seats",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/events/{{eventId}}/seats"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"eventId\": \"evt_001\",\n  \"seats\": [\n    { \"seatId\": \"A-12-01\", \"section\": \"A\", \"row\": \"12\", \"status\": \"AVAILABLE\" }\n  ],\n  \"nextToken\": null\n}"
+            },
+            {
+              "name": "404 missing event",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{gatewayBase}}/events/evt_missing/seats"
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"event not found\",\n  \"eventId\": \"evt_missing\"\n}"
             }
           ]
         }

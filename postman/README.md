@@ -14,6 +14,7 @@
 |---|---|---|
 | **Auth** | Login as alice / admin | Phase 9a Cognito `InitiateAuth` → saves `idToken` |
 | **Health** | Liveness, Get seat | Smoke / inspect seat (`AVAILABLE` → `HELD` → `PAYING` → `SOLD`) |
+| **Catalog** | List events / Get event / List seats | Public seat-map reads (no JWT) |
 | **Holds** | Hold seats | `POST .../holds` → `HELD` |
 | **Orders** | Accept / Get order | `POST /orders` → `PENDING`; `GET /orders/{orderId}` → status + ticket URLs when `CONFIRMED` |
 | **Tickets** | Download artifact / Verify | Presigned S3 GET → `POST /tickets/verify` `{ payload, signature }` (no JWT) |

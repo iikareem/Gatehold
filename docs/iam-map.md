@@ -15,6 +15,9 @@ only when the helper is too wide or missing an action the call graph needs.
 | Lambda | AWS actions / resources |
 |---|---|
 | **health** | DynamoDB **R** seats (`GetItem` for `?eventId=&seatId=`) |
+| **list-events** | DynamoDB **R** events (`Scan`) |
+| **get-event** | DynamoDB **R** events (`GetItem`) |
+| **get-seats** | DynamoDB **R** events (`GetItem` exists) · **R** seats (`Query` PK `eventId`) |
 | **hold-seat** | DynamoDB **R** events (ConditionCheck ON_SALE) · **W+Transact** seats · SSM **GetParameter** hold-ttl + max-seats |
 | **hold-sweeper** | DynamoDB **RW** seats (`Scan` + `UpdateItem`) |
 | **create-order** | DynamoDB **R** events · **W+Transact** seats · **W+Transact** orders · **RW** idempotency · SQS **SendMessage** orders queue · SSM **GetParameter** max-seats |

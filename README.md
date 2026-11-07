@@ -502,7 +502,9 @@ Write endpoints require a Cognito JWT. User ID comes from the token, never the r
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/events/{eventId}/seats` | Seat availability for the map |
+| `GET` | `/events` | List events (public; paginated) |
+| `GET` | `/events/{eventId}` | Event name + status (public; seat-map browse) |
+| `GET` | `/events/{eventId}/seats` | Seat availability for the map (public; paginated) |
 | `POST` | `/events/{eventId}/holds` | Hold seats (`seatIds` or `groupSize`). Returns `holdId`, `seatIds`, `expiresAt`, or `409` |
 | `POST` | `/orders` | Submit a purchase for a hold. Requires `Idempotency-Key`. Returns `202` |
 | `GET` | `/orders/{orderId}` | Poll order status; when `CONFIRMED`, short-lived ticket download URLs |

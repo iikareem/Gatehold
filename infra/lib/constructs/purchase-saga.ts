@@ -334,7 +334,8 @@ export class PurchaseSaga extends Construct {
     this.purchaseSaga = new sfn.StateMachine(this, "StateMachine", {
       stateMachineName: `gatehold-${stage}-purchase-saga`,
       definitionBody: sfn.DefinitionBody.fromChainable(sagaDefinition),
-      tracingEnabled: false,
+      // Phase 13b — link saga execution into the purchase X-Ray trace.
+      tracingEnabled: true,
     });
 
     this.sagaStarterFn = createNodeFn(this, "SagaStarterFn", {

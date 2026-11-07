@@ -55,6 +55,8 @@ export function createNodeFn(
     environment,
     bundling: defaultBundling,
     projectRoot,
+    // Phase 13b — purchase-path X-Ray (all Node Lambdas share this helper).
+    tracing: lambda.Tracing.ACTIVE,
   });
 }
 

@@ -165,7 +165,11 @@ export class HttpApi extends Construct {
 
     this.api = new apigateway.RestApi(this, "GateholdApi", {
       restApiName: `gatehold-${stage}`,
-      deployOptions: { stageName: stage },
+      deployOptions: {
+        stageName: stage,
+        // Phase 13b — start Trace ID at the API edge.
+        tracingEnabled: true,
+      },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: ["GET", "POST", "OPTIONS"],

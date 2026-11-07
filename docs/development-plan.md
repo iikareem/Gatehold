@@ -880,7 +880,7 @@ Logs, EMF metrics, and alarms already exist from earlier phases (Lambda stdout, 
 
 **Verify:** `cdk synth` shows Active tracing on Node Lambdas, API stage, and state machine
 
-**Status:** Pending
+**Status:** Done — `createNodeFn` Active Tracing + API stage + purchase saga `tracingEnabled`.
 
 ### Slice 13c — Shared SDK wrap + annotate helper
 
@@ -1020,7 +1020,7 @@ Copy into a notebook or tick in place:
 - [x] Phase 12d — CDK Lambda + Scheduler
 - [x] Phase 12e — EMF metric + CloudWatch alarm
 - [x] Phase 13a — Docs + slices (X-Ray plan)
-- [ ] Phase 13b — CDK Active Tracing (Node + API + saga)
+- [x] Phase 13b — CDK Active Tracing (Node + API + saga)
 - [ ] Phase 13c — Shared SDK wrap + annotate helper
 - [ ] Phase 13d — Annotate create-order + saga-starter
 - [ ] Phase 14 — WebSocket order-done notifications

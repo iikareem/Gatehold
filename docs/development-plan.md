@@ -830,7 +830,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 Logs, EMF metrics, and alarms already exist from earlier phases (Lambda stdout, reconciler EMF + alarm, refund DLQ alarm). This phase does **not** rebuild that surface; it adds tracing.
 
-**Build**
+**Build (phase overview)**
 
 - Enable **AWS X-Ray** on the purchase path: API Gateway → order accept → SQS → Step Functions → saga Lambdas → DynamoDB
 - Annotate traces with `orderId` (and `holdId` where cheap) so one buy is searchable
@@ -842,15 +842,72 @@ Logs, EMF metrics, and alarms already exist from earlier phases (Lambda stdout, 
 - Extra custom metrics / alarm suite (conflicts, saga failure rate, API 5xx, …)
 - Project-wide structured JSON log rewrite
 - Refund-path tracing beyond a short “where practical” note
+- Go Lambda Active Tracing (`createGoFn`) — purchase path is Node
 
 **Learn**
 
 - Why logs alone are hard across SQS + Step Functions
 - Trace annotations for finding one `orderId`
+- AWS propagates Trace IDs when tracing is enabled — no custom `traceId` in order JSON
 
 **Done when**
 
 - One end-to-end purchase shows up as a searchable X-Ray trace (on real AWS if MiniStack cannot)
+
+### Slice 13a — Docs + slices
+
+**Goal:** Plan matches a first-time X-Ray path before code.
+
+**Build**
+
+- Break Phase 13 into slices 13a–13d (enable → instrument → annotate → verify)
+- Runbook: MiniStack may not show a full purchase trace; prove on real AWS (`deploy:aws`) and filter by `orderId` annotation
+- Sync README Phase 13 checklist wording
+
+**Verify:** docs say no dashboards; full trace proof is real-AWS; Go workers out of scope
+
+**Status:** Done — sliced plan + runbook X-Ray note.
+
+### Slice 13b — CDK: turn tracing on
+
+**Goal:** Infra emits X-Ray segments; no handler changes yet.
+
+**Build**
+
+- `createNodeFn`: `tracing: lambda.Tracing.ACTIVE` (all Node purchase Lambdas)
+- API Gateway RestApi `deployOptions.tracingEnabled: true`
+- Purchase Step Functions `tracingEnabled: true`
+
+**Verify:** `cdk synth` shows Active tracing on Node Lambdas, API stage, and state machine
+
+**Status:** Pending
+
+### Slice 13c — Shared SDK wrap + annotate helper
+
+**Goal:** DynamoDB / SQS / SFN show as subsegments; safe annotations for later.
+
+**Build**
+
+- Dependency `aws-xray-sdk-core`
+- `captureAWSv3Client` on shared DynamoDB, SQS, SFN factories (S3/KMS same pass if cheap)
+- `annotateTrace({ ... })` helper — no-op when no segment (tests / MiniStack)
+
+**Verify:** unit test annotate does not throw without a segment; `npm test` green
+
+**Status:** Pending
+
+### Slice 13d — Annotate entry points + prove
+
+**Goal:** Searchable `orderId` on the purchase timeline.
+
+**Build**
+
+- `annotateTrace({ orderId, holdId })` in create-order and saga-starter only
+- Mark Phase 13 done; runbook steps: one real-AWS purchase → X-Ray filter `annotation.orderId`
+
+**Verify:** existing handler tests still pass; real-AWS search finds the purchase (MiniStack incomplete OK)
+
+**Status:** Pending
 
 ---
 
@@ -962,7 +1019,10 @@ Copy into a notebook or tick in place:
 - [x] Phase 12c — Go reconciler worker (read + logs)
 - [x] Phase 12d — CDK Lambda + Scheduler
 - [x] Phase 12e — EMF metric + CloudWatch alarm
-- [ ] Phase 13 — Distributed tracing (X-Ray)
+- [x] Phase 13a — Docs + slices (X-Ray plan)
+- [ ] Phase 13b — CDK Active Tracing (Node + API + saga)
+- [ ] Phase 13c — Shared SDK wrap + annotate helper
+- [ ] Phase 13d — Annotate create-order + saga-starter
 - [ ] Phase 14 — WebSocket order-done notifications
 
 When you complete a phase, add a short note under README “What I Learned” the same day — future you will forget the bug that taught the lesson.

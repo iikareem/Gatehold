@@ -238,6 +238,27 @@ Destroy when done experimenting:
 npm run destroy:aws
 ```
 
+### Phase 13 — X-Ray (purchase path)
+
+X-Ray Active Tracing is aimed at the purchase path (API → create-order → SQS → saga-starter → Step Functions → saga Lambdas). AWS propagates the Trace ID when tracing is enabled; Gatehold annotations make a buy searchable by `orderId`.
+
+**MiniStack:** traces may be missing, incomplete, or not linked across SQS / Step Functions. Do **not** treat a local gap as a Phase 13 failure.
+
+**Real AWS proof (after slices 13b–13d):**
+
+1. `npm run deploy:aws` (billing alarm on; unset MiniStack endpoints).
+2. Run one full purchase (hold → create order → wait until `CONFIRMED`).
+3. Note the `orderId` from the create-order response.
+4. Open **AWS X-Ray** → Traces → filter:
+
+   ```text
+   annotation.orderId = "ord_…"
+   ```
+
+5. Open the trace: you should see API Gateway, create-order, SQS hop, saga-starter, Step Functions, and saga task Lambdas on one timeline.
+
+Streams / email / Go workers stay **log-first** in this phase — not a required X-Ray path.
+
 ---
 
 ## npm script cheat sheet

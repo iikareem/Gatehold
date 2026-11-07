@@ -775,7 +775,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** `go test` for reconciler package green
 
-**Status:** Pending
+**Status:** Done — `seatConsistent` + table-driven tests.
 
 ### Slice 12c — Go reconciler worker (read path + logs)
 
@@ -792,7 +792,7 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 **Verify:** `go run` (or mocked client tests) logs a finding for CONFIRMED + non-SOLD
 
-**Status:** Pending
+**Status:** Done — dual entry + Events→CONFIRMED→seats loop + structured logs + build.sh; mocked Dynamo tests.
 
 ### Slice 12d — CDK Lambda + Scheduler
 
@@ -956,8 +956,8 @@ Copy into a notebook or tick in place:
 - [x] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds
 - [x] Phase 12a — Docs + invariant (detect-only)
-- [ ] Phase 12b — Go check core + unit tests
-- [ ] Phase 12c — Go reconciler worker (read + logs)
+- [x] Phase 12b — Go check core + unit tests
+- [x] Phase 12c — Go reconciler worker (read + logs)
 - [ ] Phase 12d — CDK Lambda + Scheduler
 - [ ] Phase 12e — EMF metric + CloudWatch alarm
 - [ ] Phase 13 — Observability (CloudWatch + X-Ray)

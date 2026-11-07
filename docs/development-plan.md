@@ -7,6 +7,7 @@ The README describes the finished system. This document is the path to get there
 Related docs:
 
 - [`contracts.md`](./contracts.md) — seat/order/event shapes and shared payloads
+- [`invariants.md`](./invariants.md) — cross-table rules the reconciler detects
 - [`api.md`](./api.md) — local curl cheat sheet for live endpoints
 - [`runbook.md`](./runbook.md) — local MiniStack and ops procedures
 - [`adr/`](./adr/) — why decisions were made
@@ -721,30 +722,105 @@ First event only: `OrderConfirmed` from MarkConfirmed (`PENDING` → `CONFIRMED`
 
 ---
 
-## Phase 12 — Reconciler
+## Phase 12 — Reconciler (detect-only)
 
-**Goal:** Independent repair when happy-path code leaves contradictory data.
+**Goal:** Independently find contradictory data and surface it in CloudWatch — no auto-repair writes.
 
-**Build**
+**Build (phase overview)**
 
-- `reconciler` (Go): find contradictions (e.g. `CONFIRMED` without `SOLD` seats, cancelled event with unrefunded paid order) and repair or flag
+- `reconciler` (Go): detect `CONFIRMED` orders whose seats are not `SOLD` for that `orderId`
 - Package as a Go Lambda; EventBridge Scheduler invokes it on an interval (same pattern as hold sweeper)
-- Document the invariants it enforces in `contracts.md` or a short `docs/invariants.md` if the list grows
-- Alarm or structured log when a contradiction is found and cannot be auto-repaired
+- Structured logs + Embedded Metric Format (EMF) → custom metric → CloudWatch alarm
+- Invariants live in [`invariants.md`](./invariants.md)
 
 **Out of scope**
 
-- Independent auditor CLI, loadgen, failure-suite expansion, CI/CD stages (dropped from this plan)
+- Auto-repair (`UpdateItem` on seats/orders)
+- Cancelled-event unrefunded checks (later invariant if needed)
+- Independent auditor CLI, loadgen, failure-suite expansion, CI/CD stages
 
 **Learn**
 
-- Reconciliation as a product feature, not a one-off script
-- Why scheduled repair complements saga compensation
+- Detection as a product feature, not a one-off script
+- Logs for evidence; metrics/alarms for “is this happening?”
 
 **Done when**
 
-- Injected inconsistency is fixed or alarmed by the reconciler
+- Injected `CONFIRMED` + not-`SOLD` produces a structured log and increments `ReconcilerInconsistencies`
 - Scheduler invokes the reconciler without a manual `go run`
+- Alarm exists on that metric; worker never writes repairs
+
+### Slice 12a — Docs + invariant
+
+**Goal:** Plan and contracts match detect-only before code.
+
+**Build**
+
+- Rewrite Phase 12 as detect + CloudWatch only; document slices 12a–12e
+- [`invariants.md`](./invariants.md): `CONFIRMED` ⇒ every seat `SOLD` for that `orderId`
+- Sync README Phase 12 checklist wording
+
+**Verify:** docs say no repair; one invariant named clearly
+
+**Status:** Done — detect-only plan + invariants doc + README checklist.
+
+### Slice 12b — Go check core (+ unit tests)
+
+**Goal:** Pure logic for “is this order/seat pair consistent?” with no AWS client.
+
+**Build**
+
+- Helper e.g. `seatConsistent(orderId, seat) (ok bool, reason string)`
+- Table-driven tests: missing seat, `AVAILABLE`/`HELD`/`PAYING`, `SOLD` wrong `orderId`, `SOLD` matching → ok
+
+**Verify:** `go test` for reconciler package green
+
+**Status:** Pending
+
+### Slice 12c — Go reconciler worker (read path + logs)
+
+**Goal:** Runnable detector that pages data and logs findings (CLI / Lambda handler shape).
+
+**Build**
+
+- Dual `main` like hold-sweeper
+- Loop: page Events → Query Orders GSI `eventId-status` = `CONFIRMED` → GetItem each seat → 12b helper
+- Structured log per finding; end-of-run summary (`ordersChecked`, `inconsistencies`)
+- `build.sh` + `package.json` `build:reconciler`
+- Env: `EVENTS_TABLE_NAME`, `ORDERS_TABLE_NAME`, `SEATS_TABLE_NAME`
+- **No DynamoDB writes**
+
+**Verify:** `go run` (or mocked client tests) logs a finding for CONFIRMED + non-SOLD
+
+**Status:** Pending
+
+### Slice 12d — CDK Lambda + Scheduler
+
+**Goal:** Deployed scheduled invoke; read-only IAM.
+
+**Build**
+
+- Construct: `createGoFn`, read grants on Events/Orders/Seats
+- EventBridge Scheduler rate (e.g. every 5 minutes)
+- Stack output e.g. `ReconcilerFunctionName`
+
+**Verify:** `cdk synth` exposes function + schedule
+
+**Status:** Pending
+
+### Slice 12e — EMF metric + CloudWatch alarm
+
+**Goal:** Alarmable signal when inconsistencies > 0.
+
+**Build**
+
+- EMF at end of run: namespace `Gatehold`, metric `ReconcilerInconsistencies` (dimension `stage`)
+- Alarm: threshold `>= 1`, `treatMissingData: NOT_BREACHING`
+- Output `ReconcilerAlarmName`
+
+**Verify:** synth exposes alarm name; injected inconsistency produces EMF log line
+
+**Status:** Pending
 
 ---
 
@@ -879,7 +955,11 @@ Copy into a notebook or tick in place:
 - [x] Phase 10c — GET order + presigned URLs
 - [x] Phase 10d — Verify helper
 - [ ] Phase 11 — Cancellation and mass refunds
-- [ ] Phase 12 — Reconciler
+- [x] Phase 12a — Docs + invariant (detect-only)
+- [ ] Phase 12b — Go check core + unit tests
+- [ ] Phase 12c — Go reconciler worker (read + logs)
+- [ ] Phase 12d — CDK Lambda + Scheduler
+- [ ] Phase 12e — EMF metric + CloudWatch alarm
 - [ ] Phase 13 — Observability (CloudWatch + X-Ray)
 - [ ] Phase 14 — WebSocket order-done notifications
 

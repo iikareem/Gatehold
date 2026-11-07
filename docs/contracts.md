@@ -5,6 +5,8 @@ Seat states, conditions, event shapes, and message payloads live here.
 
 Keep TypeScript types in `services/shared/src` aligned with this file.
 
+Cross-table rules (e.g. `CONFIRMED` ⇒ seats `SOLD`) live in [`invariants.md`](./invariants.md) — the reconciler detects those; this file keeps shapes and transitions.
+
 ## Seat status
 
 `AVAILABLE` → `HELD` → `PAYING` → `SOLD`
